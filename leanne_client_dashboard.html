@@ -1,0 +1,2871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glow Up Academy — Client Lifecycle Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!--
+  =====================================================================
+  HOLISTIC CLIENT LIFECYCLE DASHBOARD
+  =====================================================================
+  Single-file prototype. Single source of truth for Leanne's client
+  pipeline. Global filters → cascade across all 4 quadrants instantly.
+
+  DESIGN NOTES (for production handoff):
+  - Colour palette: deep aubergine, soft gold, warm cream, muted clinical
+    accents. Calming + luxurious.
+  - Typography (suggested Google Fonts for production):
+      Headings: 'Cormorant Garamond' (display), serif fallback
+      Body: 'Inter', system-ui fallback
+    This prototype uses system fonts only (no CDN) but layout is built
+    so swapping in webfonts works without breakage.
+  - Responsive breakpoints:
+      desktop ≥ 1100px (sidebar + main grid)
+      tablet 700–1099px (collapsed sidebar, single-column main)
+      mobile < 700px (drawer sidebar, stacked cards)
+  - Production stack assumption: React + Tailwind. The structure below
+    maps 1:1 onto React components — each .card/.section is a component.
+  =====================================================================
+-->
+<style>
+:root {
+  /* === COLOUR PALETTE === */
+  --bg: #FAF7F2;            /* warm cream — main background */
+  --surface: #FFFFFF;       /* card surfaces */
+  --surface2: #F4EFE6;      /* subtle inset surfaces */
+  --border: #EAE3D3;        /* hairline divisions */
+  --border-strong: #D9CFB8;
+
+  --primary: #4A2D6B;       /* deep aubergine — primary brand */
+  --primary-light: #7B5CA8; /* lifted purple — interactive */
+  --primary-faint: #F0EAFB; /* purple wash for selected states */
+  --primary-deep: #2E1A47;  /* deepest accent */
+
+  --gold: #C9A24A;          /* soft gold — luxe accent */
+  --gold-light: #E2C575;
+  --gold-faint: #FBF3DD;
+
+  --text: #1F1B2E;          /* almost-black with purple cast */
+  --text-muted: #6E6680;
+  --text-dim: #9B95A8;
+
+  --red: #C75A5A;           /* red flag / warning */
+  --red-faint: #FCE8E5;
+  --green: #6FA88A;         /* green flag / healthy */
+  --green-faint: #E5F0E9;
+  --amber: #D89B4A;
+  --amber-faint: #FBEFD9;
+  --blue: #5C7FB8;
+  --blue-faint: #E5EBF5;
+
+  --shadow-sm: 0 1px 2px rgba(46,26,71,0.04);
+  --shadow-md: 0 4px 14px rgba(46,26,71,0.06);
+  --shadow-lg: 0 12px 32px rgba(46,26,71,0.08);
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 18px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 {
+  font-family: 'Cormorant Garamond', 'Georgia', serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--primary-deep);
+}
+button { font-family: inherit; cursor: pointer; }
+
+/* ============ TOP BAR ============ */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-mark {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold);
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 16px;
+}
+.brand-text h1 { font-size: 18px; line-height: 1; }
+.brand-text p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+.topbar-search {
+  background: var(--surface2);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px 14px 8px 36px;
+  font-size: 13px;
+  color: var(--text);
+  width: 240px;
+  transition: all 0.15s;
+  position: relative;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236E6680' stroke-width='2'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>");
+  background-repeat: no-repeat;
+  background-position: 12px center;
+}
+.topbar-search:focus { outline: none; border-color: var(--primary-light); background-color: var(--surface); }
+.user-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 14px 4px 4px;
+  background: var(--surface2);
+  border-radius: 999px;
+}
+.user-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--primary-light) 100%);
+  color: white; font-weight: 600; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.user-name { font-size: 13px; font-weight: 500; }
+
+/* ============ LAYOUT ============ */
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 65px);
+}
+
+/* ============ SIDEBAR ============ */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 20px;
+  overflow-y: auto;
+  position: sticky;
+  top: 65px;
+  height: calc(100vh - 65px);
+}
+.sb-section { margin-bottom: 28px; }
+.sb-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sb-label .clear-btn {
+  font-size: 10px; color: var(--primary-light); cursor: pointer;
+  background: none; border: none; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.sb-label .clear-btn:hover { color: var(--primary); }
+
+.filter-list { display: flex; flex-direction: column; gap: 4px; }
+.filter-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: all 0.12s;
+  border: 1px solid transparent;
+  background: none;
+  text-align: left;
+  width: 100%;
+}
+.filter-item:hover { background: var(--surface2); }
+.filter-item.active { background: var(--primary-faint); border-color: var(--primary-light); color: var(--primary); font-weight: 500; }
+.filter-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.filter-item .count {
+  margin-left: auto;
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.filter-item.active .count { background: var(--primary); color: white; }
+
+.date-filter {
+  display: flex;
+  gap: 4px;
+  background: var(--surface2);
+  padding: 3px;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.date-filter button {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  min-width: 50px;
+}
+.date-filter button.active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
+
+/* ============ MAIN ============ */
+.main {
+  padding: 28px 32px;
+  overflow-x: hidden;
+}
+.section {
+  margin-bottom: 32px;
+}
+.section-head {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.section-head h2 { font-size: 22px; }
+.section-head p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.section-head .head-actions { display: flex; gap: 8px; align-items: center; }
+
+.btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.12s;
+}
+.btn:hover { background: var(--primary-deep); }
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { border-color: var(--primary-light); color: var(--primary); }
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+  color: white;
+}
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+
+/* ============ KPI CARDS ============ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.kpi-card .kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.kpi-card .kpi-value {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--primary-deep);
+  line-height: 1;
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-card .kpi-trend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.kpi-card .kpi-trend .trend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 10px;
+}
+.trend-up { background: var(--green-faint); color: var(--green); }
+.trend-down { background: var(--red-faint); color: var(--red); }
+.trend-flat { background: var(--surface2); color: var(--text-muted); }
+
+.kpi-card.warning {
+  border-color: var(--amber);
+  background: linear-gradient(180deg, var(--amber-faint) 0%, var(--surface) 60%);
+}
+.kpi-card.warning .kpi-label { color: var(--amber); }
+.kpi-card.warning::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 60px; height: 60px;
+  background: var(--amber);
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.18;
+}
+.kpi-card .kpi-icon {
+  position: absolute;
+  top: 18px; right: 18px;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--primary-faint);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--primary-light);
+}
+.kpi-card.warning .kpi-icon { background: var(--amber-faint); color: var(--amber); }
+
+/* ============ FUNNEL ============ */
+.funnel-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.funnel-row {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+.funnel-stage {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.18s;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.funnel-stage:hover {
+  background: var(--primary-faint);
+  border-color: var(--primary-light);
+}
+.funnel-stage.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+.funnel-stage.active .fs-name,
+.funnel-stage.active .fs-count { color: white; }
+.funnel-stage.active .fs-sub { color: rgba(255,255,255,0.75); }
+.funnel-stage .fs-name { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.funnel-stage .fs-count { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600; color: var(--primary-deep); line-height: 1; margin: 4px 0; }
+.funnel-stage .fs-sub { font-size: 11px; color: var(--text-muted); }
+.funnel-stage::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid var(--surface2);
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  z-index: 2;
+}
+.funnel-stage:last-child::after { display: none; }
+.funnel-stage.active::after { border-left-color: var(--primary); }
+.funnel-stage:hover::after { border-left-color: var(--primary-faint); }
+
+/* Stage detail (revealed on click) */
+.stage-detail {
+  margin-top: 16px;
+  padding: 18px 20px;
+  background: var(--primary-faint);
+  border-radius: var(--radius);
+  border: 1px solid var(--primary-light);
+  display: none;
+}
+.stage-detail.show { display: block; }
+.stage-detail .sd-title { font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 6px; }
+.stage-detail .sd-desc { font-size: 13px; color: var(--text); line-height: 1.6; margin-bottom: 14px; }
+.stage-detail .sd-leads { display: flex; gap: 8px; flex-wrap: wrap; }
+.lead-pill {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px 6px 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.lead-pill:hover { border-color: var(--primary-light); }
+.lead-pill .avatar { width: 22px; height: 22px; border-radius: 50%; }
+
+/* ============ LEADS ============ */
+.leads-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+.lead-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.lead-card:hover { box-shadow: var(--shadow-md); border-color: var(--primary-light); }
+.lead-card.flag-red { border-left: 4px solid var(--red); }
+.lead-card.flag-green { border-left: 4px solid var(--green); }
+.lead-card.flag-neutral { border-left: 4px solid var(--gold); }
+
+.lead-head { display: flex; gap: 12px; margin-bottom: 14px; }
+.avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: 600; font-size: 14px;
+  font-family: 'Cormorant Garamond', serif;
+}
+.lead-name-block { flex: 1; min-width: 0; }
+.lead-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.lead-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.flag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 6px;
+}
+.flag-red-pill { background: var(--red-faint); color: var(--red); }
+.flag-green-pill { background: var(--green-faint); color: var(--green); }
+.flag-neutral-pill { background: var(--gold-faint); color: var(--gold); }
+
+.action-plan {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.action-plan .ap-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.ap-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.ap-row:last-child { margin-bottom: 0; }
+.ap-row strong {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  min-width: 70px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.lead-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+.lead-foot button { flex: 1; }
+
+/* ============ TASKS ============ */
+.tasks-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+.tasks-toolbar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.task-tab {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--surface2);
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+}
+.task-tab.active { background: var(--primary-faint); color: var(--primary); border-color: var(--primary-light); }
+.task-list { display: flex; flex-direction: column; gap: 6px; }
+.task-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all 0.12s;
+}
+.task-row:hover { border-color: var(--primary-light); background: var(--surface2); }
+.task-row.completed { opacity: 0.5; background: var(--surface2); }
+.task-row.completed .task-text { text-decoration: line-through; }
+.task-check {
+  width: 20px; height: 20px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  transition: all 0.15s;
+}
+.task-check:hover { border-color: var(--primary-light); }
+.task-row.completed .task-check { background: var(--primary); border-color: var(--primary); }
+.task-check svg { display: none; color: white; }
+.task-row.completed .task-check svg { display: block; }
+.task-priority {
+  width: 4px;
+  height: 22px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.task-priority.high { background: var(--red); }
+.task-priority.medium { background: var(--amber); }
+.task-priority.low { background: var(--green); }
+.task-text { flex: 1; font-size: 13px; color: var(--text); }
+.task-due {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 3px 10px;
+  background: var(--surface2);
+  border-radius: 999px;
+  font-weight: 500;
+}
+.task-due.overdue { background: var(--red-faint); color: var(--red); }
+.task-due.today { background: var(--amber-faint); color: var(--amber); }
+.task-lead {
+  font-size: 11px;
+  color: var(--primary-light);
+  padding: 3px 10px;
+  background: var(--primary-faint);
+  border-radius: 999px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.task-lead:hover { background: var(--primary); color: white; }
+
+/* ============ MODAL ============ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(46,26,71,0.5);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  max-width: 720px;
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+}
+.modal-header {
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.modal-header h2 { font-size: 26px; }
+.modal-header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.modal-close {
+  background: var(--surface2);
+  border: none;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.modal-close:hover { background: var(--border); color: var(--text); }
+.modal-body { padding: 24px 28px 28px; }
+.modal-section { margin-bottom: 24px; }
+.modal-section h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.modal-section p { font-size: 13px; color: var(--text); line-height: 1.65; margin-bottom: 8px; }
+.metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.metric-cell {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+.metric-cell .mc-num { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; color: var(--primary-deep); }
+.metric-cell .mc-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-top: 4px; }
+.bar-row { margin-bottom: 10px; }
+.bar-row .br-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.bar-row .br-name { color: var(--text); font-weight: 500; }
+.bar-row .br-val { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.bar-row .br-track { height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+.bar-row .br-fill { height: 100%; border-radius: 99px; transition: width 0.4s; }
+
+/* ============ ADD LEAD FORM ============ */
+.form-row { margin-bottom: 16px; }
+.form-row label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 6px; }
+.form-input, .form-select, .form-textarea {
+  width: 100%; padding: 10px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 13.5px;
+  color: var(--text); background: var(--surface);
+  outline: none; transition: border-color 0.15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--primary-light); }
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+.form-chip {
+  padding: 5px 13px; border-radius: 99px; font-size: 12px; font-weight: 500;
+  border: 1.5px solid var(--border); cursor: pointer;
+  background: var(--surface); color: var(--text-muted);
+  transition: all 0.15s; user-select: none;
+}
+.form-chip.selected { background: var(--primary-faint); border-color: var(--primary-light); color: var(--primary); }
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; border-top: 1px solid var(--border); margin-top: 20px; }
+.add-lead-modal { max-width: 580px; }
+
+/* ============ MOBILE ============ */
+.mobile-toggle { display: none; }
+
+@media (max-width: 1099px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    top: 65px;
+    left: 0;
+    width: 280px;
+    height: calc(100vh - 65px);
+    transform: translateX(-100%);
+    transition: transform 0.25s;
+    z-index: 40;
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .mobile-toggle { display: flex; }
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 700px) {
+  .topbar-search { display: none; }
+  .topbar { padding: 12px 16px; }
+  .main { padding: 20px 16px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .funnel-row { flex-direction: column; }
+  .funnel-stage::after { display: none; }
+  .leads-grid { grid-template-columns: 1fr; }
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .section-head h2 { font-size: 19px; }
+  .kpi-card .kpi-value { font-size: 28px; }
+}
+
+/* utilities */
+.fade-in { animation: fadeIn 0.3s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.empty-state {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border-radius: var(--radius);
+}
+
+/* ============ VIEW SWITCHER ============ */
+.view-switcher {
+  display: flex;
+  background: var(--surface2);
+  border-radius: 999px;
+  padding: 3px;
+}
+.view-switcher button {
+  background: none;
+  border: none;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.view-switcher button.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+.view-switcher button .badge-num {
+  background: var(--red);
+  color: white;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-weight: 700;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ============ MESSAGES VIEW ============ */
+.messages-view {
+  display: none;
+  height: calc(100vh - 65px);
+  grid-template-columns: 340px 1fr;
+}
+.messages-view.active { display: grid; }
+.msg-list-pane {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.msg-list-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 5;
+}
+.msg-list-header h2 { font-size: 22px; margin-bottom: 6px; }
+.msg-filter-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+}
+.msg-filter-tabs button {
+  flex: 1;
+  background: var(--surface2);
+  border: none;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-family: inherit;
+}
+.msg-filter-tabs button.active { background: var(--primary-faint); color: var(--primary); }
+.msg-conv-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  align-items: flex-start;
+}
+.msg-conv-item:hover { background: var(--surface2); }
+.msg-conv-item.active { background: var(--primary-faint); }
+.msg-conv-item .avatar { width: 38px; height: 38px; font-size: 13px; flex-shrink: 0; }
+.msg-conv-info { flex: 1; min-width: 0; }
+.msg-conv-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.msg-conv-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.msg-conv-time { font-size: 11px; color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.msg-conv-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+.msg-conv-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 6px;
+}
+.msg-unread-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--primary-light);
+  flex-shrink: 0;
+}
+.msg-status-tag {
+  font-size: 9px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.msg-thread-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+.msg-thread-header {
+  padding: 16px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.msg-thread-header .avatar { width: 42px; height: 42px; font-size: 14px; }
+.msg-thread-info { flex: 1; }
+.msg-thread-info .mt-name { font-size: 16px; font-weight: 600; }
+.msg-thread-info .mt-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.msg-thread-actions { display: flex; gap: 6px; }
+.msg-thread-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.msg-bubble {
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  position: relative;
+}
+.msg-bubble.from-lead {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+.msg-bubble.from-leanne {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+.msg-bubble .msg-time {
+  font-size: 10px;
+  margin-top: 4px;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+.msg-day-divider {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin: 8px 0;
+  position: relative;
+}
+.msg-day-divider::before, .msg-day-divider::after {
+  content: '';
+  position: absolute; top: 50%;
+  width: calc(50% - 70px);
+  height: 1px; background: var(--border);
+}
+.msg-day-divider::before { left: 0; }
+.msg-day-divider::after { right: 0; }
+.msg-context-banner {
+  background: var(--gold-faint);
+  border-left: 3px solid var(--gold);
+  padding: 10px 14px;
+  margin: 8px 0 12px;
+  border-radius: 0 8px 8px 0;
+  font-size: 12px;
+  color: var(--text);
+  align-self: stretch;
+}
+.msg-context-banner strong { color: var(--gold); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 4px; }
+.msg-compose {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.msg-compose textarea {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  resize: none;
+  min-height: 40px;
+  max-height: 120px;
+  line-height: 1.5;
+}
+.msg-compose textarea:focus { outline: none; border-color: var(--primary-light); background: var(--surface); }
+.msg-compose-send {
+  background: var(--primary);
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.msg-compose-send:hover { background: var(--primary-deep); }
+.msg-quick-replies {
+  display: flex;
+  gap: 6px;
+  padding: 0 20px 12px;
+  flex-wrap: wrap;
+  background: var(--surface);
+}
+.msg-quick-reply {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.msg-quick-reply:hover { background: var(--primary-faint); color: var(--primary); border-color: var(--primary-light); }
+.msg-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px;
+}
+
+/* ============ PROFILE MODAL TABS ============ */
+.profile-modal { max-width: 880px; }
+.profile-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.profile-tabs::-webkit-scrollbar { display: none; }
+.profile-tab {
+  background: none;
+  border: none;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.profile-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.profile-tab:hover:not(.active) { color: var(--text); }
+.profile-tab .tab-count {
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+.profile-tab.active .tab-count { background: var(--primary-faint); color: var(--primary); }
+.profile-pane { display: none; padding: 24px 28px 28px; }
+.profile-pane.active { display: block; }
+
+/* Story & Struggles styles */
+.struggle-block {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.struggle-block.urgent { background: var(--red-faint); border-left: 3px solid var(--red); }
+.struggle-block.warm { background: var(--gold-faint); border-left: 3px solid var(--gold); }
+.struggle-block.positive { background: var(--green-faint); border-left: 3px solid var(--green); }
+.struggle-block h4 {
+  font-family: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.struggle-block ul { padding-left: 16px; margin: 0; }
+.struggle-block li { font-size: 13px; line-height: 1.6; margin-bottom: 4px; color: var(--text); }
+.struggle-block p { font-size: 13px; line-height: 1.65; color: var(--text); }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 22px; }
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 6px; top: 4px; bottom: 4px;
+  width: 2px;
+  background: var(--border);
+}
+.timeline-item { margin-bottom: 14px; position: relative; }
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -22px; top: 4px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--primary-light);
+}
+.timeline-item.milestone::before { background: var(--gold); border-color: var(--gold); }
+.timeline-item .ti-date { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.timeline-item .ti-title { font-size: 13px; font-weight: 600; color: var(--text); margin: 2px 0; }
+.timeline-item .ti-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+/* Notes */
+.note-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.note-card .nc-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.note-card .nc-text { font-size: 13px; color: var(--text); line-height: 1.6; white-space: pre-wrap; }
+
+/* Mini messages preview in profile */
+.profile-msg-mini {
+  background: var(--surface2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+.profile-msg-mini .pmm-from { font-size: 11px; font-weight: 600; color: var(--primary); margin-bottom: 4px; }
+.profile-msg-mini .pmm-from.lead { color: var(--gold); }
+.profile-msg-mini .pmm-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+.profile-msg-mini .pmm-time { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+@media (max-width: 1099px) {
+  .messages-view { grid-template-columns: 1fr; }
+  .msg-list-pane { display: block; }
+  .messages-view.thread-active .msg-list-pane { display: none; }
+  .messages-view:not(.thread-active) .msg-thread-pane { display: none; }
+}
+@media (max-width: 700px) {
+  .profile-tabs { padding: 0 12px; }
+  .msg-bubble { max-width: 85%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====================== LOGIN SCREEN ====================== -->
+<div id="login-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:200;align-items:center;justify-content:center;flex-direction:column;">
+  <div style="background:var(--surface);border-radius:var(--radius-lg);padding:48px 44px;max-width:420px;width:100%;box-shadow:var(--shadow-lg);border:1px solid var(--border);text-align:center;">
+    <div style="width:56px;height:56px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:#fff;margin:0 auto 20px;">G</div>
+    <h2 style="font-size:28px;margin-bottom:6px;color:var(--primary-deep);">Glow Up Academy</h2>
+    <p style="color:var(--text-muted);font-size:13.5px;margin-bottom:28px;">Enter your email and we'll send you a magic link to sign in — no password needed.</p>
+    <input id="login-email" type="email" placeholder="your@email.com"
+      style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;margin-bottom:12px;transition:border-color 0.15s;"
+      onkeydown="if(event.key==='Enter')sendMagicLink()"
+      onfocus="this.style.borderColor='var(--primary-light)'" onblur="this.style.borderColor='var(--border)'" />
+    <button id="login-btn" onclick="sendMagicLink()"
+      style="width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;transition:background 0.15s;"
+      onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background='var(--primary)'">
+      Send Magic Link ✨
+    </button>
+    <p id="login-msg" style="margin-top:14px;font-size:13px;min-height:18px;color:var(--text-muted);"></p>
+    <p style="margin-top:24px;font-size:11px;color:var(--text-dim);">Secure login powered by Supabase · Your data is encrypted</p>
+  </div>
+</div>
+
+<!-- ====================== APP SHELL (shown after login) ====================== -->
+<div id="app-shell" style="display:none;">
+
+<!-- ====================== TOP BAR ====================== -->
+<div class="topbar">
+  <div class="brand">
+    <button class="btn-ghost mobile-toggle btn-sm" id="sb-toggle" style="display:none;padding:6px 10px;">☰</button>
+    <div class="brand-mark">G</div>
+    <div class="brand-text">
+      <h1>Glow Up Academy</h1>
+      <p>Client Lifecycle Dashboard</p>
+    </div>
+  </div>
+  <div class="view-switcher" id="view-switcher">
+    <button class="active" data-view="dashboard">Dashboard</button>
+    <button data-view="messages">Messages <span class="badge-num" id="msg-unread-count" style="display:none;">0</span></button>
+  </div>
+  <div class="topbar-right">
+    <input class="topbar-search" id="search" placeholder="Search clients..." />
+    <div class="user-pill" style="gap:8px;">
+      <div class="user-avatar">●</div>
+      <div class="user-name" id="user-badge" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Signed in</div>
+      <button onclick="signOut()" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px 9px;font-size:11px;color:var(--text-muted);cursor:pointer;" title="Sign out">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== LAYOUT ====================== -->
+<div class="layout" id="dashboard-view">
+
+  <!-- ============ SIDEBAR (Global Filters) ============ -->
+  <aside class="sidebar" id="sidebar">
+
+    <div class="sb-section">
+      <div class="sb-label"><span>Lead Status</span><button class="clear-btn" data-clear="status">Clear</button></div>
+      <div class="filter-list" id="filter-status"></div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label"><span>Last Interaction</span></div>
+      <div class="date-filter" id="filter-date">
+        <button data-range="7" class="active">7d</button>
+        <button data-range="14">14d</button>
+        <button data-range="30">30d</button>
+        <button data-range="all">All</button>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label"><span>Imbalance Area</span><button class="clear-btn" data-clear="imbalance">Clear</button></div>
+      <div class="filter-list" id="filter-imbalance"></div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-label"><span>Quick Actions</span></div>
+      <button class="btn btn-sm" onclick="openAddLeadModal()" style="width:100%;margin-bottom:6px;">+ New Lead</button>
+      <button class="btn-ghost btn-sm" style="width:100%;border:1px solid var(--border);">Export Pipeline</button>
+    </div>
+
+  </aside>
+
+  <!-- ============ MAIN CONTENT ============ -->
+  <main class="main">
+
+    <!-- =========== QUADRANT 1: KPIs =========== -->
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Executive Summary</h2>
+          <p>Pipeline at a glance · vs previous 7 days</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn-ghost btn-sm">Last 7 days ▾</button>
+        </div>
+      </div>
+      <div class="kpi-grid" id="kpi-grid"></div>
+    </section>
+
+    <!-- =========== QUADRANT 2: FUNNEL =========== -->
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Client Funnel</h2>
+          <p>Awareness through retention · click any stage to see what's stuck</p>
+        </div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-row" id="funnel-row"></div>
+        <div class="stage-detail" id="stage-detail"></div>
+      </div>
+    </section>
+
+    <!-- =========== QUADRANT 3: ACTIVE LEADS =========== -->
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Active Leads <span id="leads-count" style="font-size:14px;color:var(--text-muted);font-family:inherit;font-weight:400;">· 0</span></h2>
+          <p id="leads-filter-summary">Filtered by your sidebar selections</p>
+        </div>
+      </div>
+      <div class="leads-grid" id="leads-grid"></div>
+    </section>
+
+    <!-- =========== QUADRANT 4: TASKS =========== -->
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Action Items</h2>
+          <p>What needs you today · sorted by priority and due date</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn btn-sm">+ Add Task</button>
+        </div>
+      </div>
+      <div class="tasks-card">
+        <div class="tasks-toolbar">
+          <button class="task-tab active" data-tasktab="open">Open <span id="cnt-open">0</span></button>
+          <button class="task-tab" data-tasktab="today">Due Today <span id="cnt-today">0</span></button>
+          <button class="task-tab" data-tasktab="overdue">Overdue <span id="cnt-overdue">0</span></button>
+          <button class="task-tab" data-tasktab="completed">Completed <span id="cnt-done">0</span></button>
+          <div style="margin-left:auto;font-size:11px;color:var(--text-muted);">Toggle a task ✓ to update KPIs</div>
+        </div>
+        <div class="task-list" id="task-list"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ====================== MESSAGES VIEW ====================== -->
+<div class="messages-view" id="messages-view">
+  <div class="msg-list-pane">
+    <div class="msg-list-header">
+      <h2>Messages</h2>
+      <p style="font-size:12px;color:var(--text-muted);">All client conversations · sorted by recent activity</p>
+      <div class="msg-filter-tabs" id="msg-filter-tabs">
+        <button class="active" data-msgfilter="all">All</button>
+        <button data-msgfilter="unread">Unread</button>
+        <button data-msgfilter="reply">Needs Reply</button>
+      </div>
+    </div>
+    <div id="msg-conv-list"></div>
+  </div>
+  <div class="msg-thread-pane" id="msg-thread-pane">
+    <div class="msg-empty" id="msg-empty">
+      <div style="font-size:42px;margin-bottom:12px;">💬</div>
+      <div>Select a conversation to begin</div>
+      <div style="font-size:12px;margin-top:6px;">Or click any client card to message them directly</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== MODAL: FULL REPORT ====================== -->
+<div class="modal-overlay" id="modal">
+  <div class="modal" id="modal-body">
+    <!-- populated dynamically -->
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   SUPABASE CONFIG
+   Paste your Publishable key below (from Supabase → Settings → API Keys)
+   The URL is already set for your project.
+   ===================================================================== */
+const SUPABASE_URL = 'https://mfyykvrwukchowlxywnz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kT-2p3JgFG22wh4cff5jwg_5Zrnd_Ti';
+
+// Initialise Supabase client (safe to use in browser with publishable key + RLS)
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* =====================================================================
+   AUTHENTICATION
+   Magic link email login — works for anyone, no Google account needed.
+   Leanne / Adam log in once and stay logged in. Clients get a link sent
+   to their email.
+   ===================================================================== */
+let CURRENT_USER = null;
+
+async function initAuth() {
+  // Check if already logged in (persisted session)
+  const { data: { session } } = await db.auth.getSession();
+  if (session) {
+    CURRENT_USER = session.user;
+    showApp();
+  } else {
+    showLogin();
+  }
+
+  // Listen for auth state changes (magic link click completes login)
+  db.auth.onAuthStateChange((_event, session) => {
+    if (session) {
+      CURRENT_USER = session.user;
+      showApp();
+    } else {
+      CURRENT_USER = null;
+      showLogin();
+    }
+  });
+}
+
+async function sendMagicLink() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) { shakeLoginInput(); return; }
+  const btn = document.getElementById('login-btn');
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
+  const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  if (error) {
+    document.getElementById('login-msg').textContent = 'Something went wrong — check the email and try again.';
+    document.getElementById('login-msg').style.color = 'var(--red)';
+    btn.textContent = 'Send Magic Link';
+    btn.disabled = false;
+  } else {
+    document.getElementById('login-msg').textContent = '✅ Link sent! Check your inbox (and spam) — click the link to log in.';
+    document.getElementById('login-msg').style.color = 'var(--green)';
+    btn.textContent = 'Resend Link';
+    btn.disabled = false;
+  }
+}
+
+async function signOut() {
+  await db.auth.signOut();
+}
+
+function shakeLoginInput() {
+  const inp = document.getElementById('login-email');
+  inp.style.borderColor = 'var(--red)';
+  inp.focus();
+  setTimeout(() => inp.style.borderColor = '', 1500);
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-shell').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'block';
+  // Update the user email badge in topbar
+  const badge = document.getElementById('user-badge');
+  if (badge && CURRENT_USER) badge.textContent = CURRENT_USER.email;
+  renderAll();
+  renderConversationList();
+}
+
+/* =====================================================================
+   DUMMY DATA — simulated API. In production this would be a fetch to
+   a backend (e.g. /api/leads, /api/tasks). Each block below shows the
+   shape the real endpoint would return.
+   ===================================================================== */
+
+// ---------- Imbalance areas (simulated body system flags) ----------
+const IMBALANCE_AREAS = [
+  { id: 'sleep',       label: 'Sleep & Recovery',   color: '#7B5CA8' },
+  { id: 'anxiety',     label: 'Anxiety / Nervous',  color: '#C75A5A' },
+  { id: 'hormonal',    label: 'Hormonal',           color: '#D89B4A' },
+  { id: 'digestive',   label: 'Digestive',          color: '#6FA88A' },
+  { id: 'energy',      label: 'Energy / Adrenal',   color: '#C9A24A' },
+  { id: 'trauma',      label: 'Trauma / Emotional', color: '#5C7FB8' },
+  { id: 'inflammation',label: 'Inflammation',       color: '#A04C7A' }
+];
+
+// ---------- Lead statuses ----------
+const LEAD_STATUSES = [
+  { id: 'new',       label: 'New Enquiry',     color: '#5C7FB8' },
+  { id: 'engaged',   label: 'Engaged',         color: '#7B5CA8' },
+  { id: 'scan',      label: 'Pending Scan',    color: '#D89B4A' },
+  { id: 'consult',   label: 'Consult Booked',  color: '#C9A24A' },
+  { id: 'academy',   label: 'In Academy',      color: '#6FA88A' },
+  { id: 'redflag',   label: 'Red Flag',        color: '#C75A5A' }
+];
+
+// ---------- Funnel stages ----------
+const FUNNEL_STAGES = [
+  { id: 'awareness',   label: 'Awareness',    desc: 'Lead has discovered Leanne — found content, joined email list, or came in through a referral. They\'re watching, not yet committed.' },
+  { id: 'interest',    label: 'Interest',     desc: 'Lead has actively engaged — DM\'d, replied to email, asked a question. They\'re weighing whether this is right for them.' },
+  { id: 'conversion',  label: 'Conversion',   desc: 'Lead has bought the Inner Voice 2.0 Aura Full Body Scan (£47). Their first commitment. The trust threshold has been crossed.' },
+  { id: 'data',        label: 'Data Capture', desc: 'Scan booked or completed but report not yet processed and reviewed with the client. The most fragile stage — leads stall here.' },
+  { id: 'deepdive',    label: 'Deep Dive',    desc: 'Working through scan results in 1:1. Building the personalised protocol. This is where transformation begins to take shape.' },
+  { id: 'retention',   label: 'Retention',    desc: 'Active in Glow Up Academy or ongoing care. Long-term relationship. Content here serves community, not acquisition.' }
+];
+
+// ---------- Leads (simulated client roster) ----------
+const LEADS = [
+  { id:'L01', name:'Sarah K.',     initials:'SK', status:'redflag',   funnelStage:'data',       imbalance:['sleep','anxiety'],   flag:'red',   lastDays:9,  source:'Instagram Reel',
+    actionPlan:{ root:'Sleep deprivation + chronic stress', imbalance:'Persistent anxiety, low cortisol pattern', action:'Schedule 10-min daily breathwork; reschedule scan review (overdue)' },
+    fullReport:{ scanDate:'12 Apr 2026', overall:62, sections:[
+      { name:'Nervous System Regulation', value:38 },
+      { name:'Adrenal Function', value:42 },
+      { name:'Sleep Quality Index', value:31 },
+      { name:'Inflammation Markers', value:67 },
+      { name:'Emotional Resonance', value:54 } ],
+      notes:'Client missed her last 1:1 review — first follow-up sent 5 days ago, no response. Likely overwhelmed. Recommend a low-pressure check-in DM, not a scheduled call.' } },
+
+  { id:'L02', name:'Emma T.',      initials:'ET', status:'academy',   funnelStage:'retention',  imbalance:['hormonal','energy'],  flag:'green', lastDays:2,  source:'Friend referral',
+    actionPlan:{ root:'Hormonal cycle disruption (now stabilising)', imbalance:'Energy returning, sleep improving', action:'30-day check-in; gather testimonial — she said "this changed my life"' },
+    fullReport:{ scanDate:'02 Mar 2026', overall:81, sections:[
+      { name:'Hormonal Balance', value:78 },
+      { name:'Energy & Vitality', value:84 },
+      { name:'Digestive Function', value:79 },
+      { name:'Sleep Quality Index', value:82 },
+      { name:'Emotional Resonance', value:85 } ],
+      notes:'A genuine green flag. Active in the Academy community, posts wins weekly. Strong testimonial candidate — ask for a video clip when next on a call.' } },
+
+  { id:'L03', name:'Hannah B.',    initials:'HB', status:'scan',      funnelStage:'conversion', imbalance:['hormonal'],          flag:'neutral', lastDays:1, source:'Email list',
+    actionPlan:{ root:'Awaiting scan completion', imbalance:'Pre-scan: hormonal symptoms reported (cycle, mood)', action:'Send scan reminder; book consult call for next Tuesday' },
+    fullReport:{ scanDate:'Pending', overall:null, sections:[], notes:'Has paid but not yet recorded the voice sample. Common stall point. Send the recording-instructions video; offer to walk her through it on a 5-min call.' } },
+
+  { id:'L04', name:'Maya R.',      initials:'MR', status:'new',       funnelStage:'awareness',  imbalance:['energy'],            flag:'neutral', lastDays:0, source:'Reel: "I healed my autoimmune"',
+    actionPlan:{ root:'New enquiry — root cause unknown', imbalance:'Reports chronic exhaustion, brain fog', action:'Send welcome email today; offer free 15-min discovery call' },
+    fullReport:{ scanDate:null, overall:null, sections:[], notes:'Fresh lead — DM\'d after the autoimmune Reel. Warm tone. Mentioned she\'s "tried everything." Lead with empathy, not a sales pitch.' } },
+
+  { id:'L05', name:'Charlotte D.', initials:'CD', status:'redflag',   funnelStage:'retention',  imbalance:['anxiety','trauma'],  flag:'red',   lastDays:21, source:'Instagram',
+    actionPlan:{ root:'In Academy but disengaged', imbalance:'Last login 3 weeks ago; missed 2 community calls', action:'Personal voice DM — no automation. Ask if she\'s ok before anything else.' },
+    fullReport:{ scanDate:'18 Feb 2026', overall:58, sections:[
+      { name:'Nervous System Regulation', value:45 },
+      { name:'Adrenal Function', value:52 },
+      { name:'Sleep Quality Index', value:61 },
+      { name:'Emotional Resonance', value:39 },
+      { name:'Inflammation Markers', value:72 } ],
+      notes:'Mentioned a difficult anniversary in March. Likely emotional rather than logistical disengagement. Trauma-informed approach is essential here.' } },
+
+  { id:'L06', name:'Olivia P.',    initials:'OP', status:'consult',   funnelStage:'conversion', imbalance:['digestive'],         flag:'neutral', lastDays:3, source:'YouTube Short',
+    actionPlan:{ root:'Just bought scan after watching 4 weeks of content', imbalance:'Pre-scan: digestive issues, bloating', action:'Send scan onboarding pack; warm welcome message' },
+    fullReport:{ scanDate:'Pending', overall:null, sections:[], notes:'Watched the "I healed my autoimmune disease" video three times before buying. Strong intent. Move her through onboarding fast.' } },
+
+  { id:'L07', name:'Jess W.',      initials:'JW', status:'consult',   funnelStage:'deepdive',   imbalance:['anxiety','sleep'],   flag:'neutral', lastDays:4, source:'Facebook',
+    actionPlan:{ root:'Mid-protocol — nervous system focus', imbalance:'Sleep onset improved 40%, anxiety easing', action:'Reply to her message about magnesium dosage; schedule next check-in' },
+    fullReport:{ scanDate:'28 Mar 2026', overall:69, sections:[
+      { name:'Nervous System Regulation', value:64 },
+      { name:'Sleep Quality Index', value:71 },
+      { name:'Energy & Vitality', value:66 },
+      { name:'Digestive Function', value:74 },
+      { name:'Emotional Resonance', value:68 } ],
+      notes:'Engaged client. Asks specific questions, follows protocol consistently. Re-scan in 4 weeks to track progression.' } },
+
+  { id:'L08', name:'Amy F.',       initials:'AF', status:'academy',   funnelStage:'retention',  imbalance:['energy','digestive'],flag:'green', lastDays:5, source:'Glow Up Academy member 6mo',
+    actionPlan:{ root:'Long-term member — energy and digestion stable', imbalance:'Maintaining well; occasional dips around stress', action:'Invite to community speaker spot — share her story with members' },
+    fullReport:{ scanDate:'15 Jan 2026', overall:77, sections:[
+      { name:'Energy & Vitality', value:80 },
+      { name:'Digestive Function', value:78 },
+      { name:'Hormonal Balance', value:74 },
+      { name:'Sleep Quality Index', value:76 },
+      { name:'Emotional Resonance', value:79 } ],
+      notes:'Strong community presence. Has referred 2 friends. Invite her to be a guest in next Reveal2Heal episode.' } },
+
+  { id:'L09', name:'Kate L.',      initials:'KL', status:'engaged',   funnelStage:'interest',   imbalance:['anxiety'],           flag:'neutral', lastDays:6, source:'Reel comment',
+    actionPlan:{ root:'Watching content, hasn\'t taken action yet', imbalance:'Self-reports stress, "always overwhelmed"', action:'Send the "DM me SCAN" Reel; soft invite, no pressure' },
+    fullReport:{ scanDate:null, overall:null, sections:[], notes:'Has commented on 4 separate Reels in the last 3 weeks. Engaged without converting yet. Warm DM is the right move — not a sales push.' } },
+
+  { id:'L10', name:'Sophie H.',    initials:'SH', status:'scan',      funnelStage:'data',       imbalance:['inflammation'],      flag:'neutral', lastDays:8, source:'Email list',
+    actionPlan:{ root:'Scan paid 8 days ago, voice sample not received', imbalance:'Pre-scan: chronic inflammation reported', action:'Second scan reminder — explain why the 10-second sample matters' },
+    fullReport:{ scanDate:'Pending', overall:null, sections:[], notes:'Booked the scan after the "What is an Inner Voice Scan" Reel. Has gone quiet. Common drop-off — needs a personal nudge.' } },
+
+  { id:'L11', name:'Lucy G.',      initials:'LG', status:'redflag',   funnelStage:'deepdive',   imbalance:['trauma','sleep'],    flag:'red',   lastDays:14, source:'Direct message',
+    actionPlan:{ root:'Missed last 2 sessions — no explanation', imbalance:'Trauma history; protocol partly started', action:'Personal check-in DM today. Lead with care, not the missed appointments.' },
+    fullReport:{ scanDate:'21 Mar 2026', overall:54, sections:[
+      { name:'Nervous System Regulation', value:41 },
+      { name:'Sleep Quality Index', value:43 },
+      { name:'Emotional Resonance', value:38 },
+      { name:'Adrenal Function', value:55 },
+      { name:'Inflammation Markers', value:74 } ],
+      notes:'Disclosed trauma history in first session. May be in a difficult window. Low-pressure, presence-first approach is critical.' } },
+
+  { id:'L12', name:'Becky M.',     initials:'BM', status:'academy',   funnelStage:'retention',  imbalance:['hormonal','energy'], flag:'green', lastDays:1, source:'New Academy member',
+    actionPlan:{ root:'Just joined Academy — month 1 of protocol', imbalance:'Hormonal + energy; symptoms easing', action:'Welcome to Academy message; book her into onboarding call' },
+    fullReport:{ scanDate:'05 Apr 2026', overall:72, sections:[
+      { name:'Hormonal Balance', value:69 },
+      { name:'Energy & Vitality', value:71 },
+      { name:'Sleep Quality Index', value:74 },
+      { name:'Digestive Function', value:78 },
+      { name:'Emotional Resonance', value:73 } ],
+      notes:'High intent, joined Academy within 48h of scan review. Set up monthly check-ins for her first 90 days.' } }
+];
+
+// ---------- Extended client profiles (rich data) ----------
+// Keyed by lead.id — kept separate to keep LEADS array readable.
+const LEAD_DETAILS = {
+  L01: { // Sarah K. — Red Flag, stuck in Data Capture
+    backstory: "Sarah found Leanne through a Reel about healing autoimmune disease naturally. She's 38, a teacher, and has been managing what doctors loosely call 'chronic fatigue with fibromyalgia features' for 6 years. She was sleeping 10 hours and waking exhausted. She paid for the scan three weeks ago after watching every Reel Leanne had posted that month.",
+    struggles: {
+      current: ["Wakes exhausted no matter how much she sleeps","Pain flares she can't predict or control","Brain fog so bad she's worried about her job","Feels like she's failing her partner and stepkids"],
+      hasTried: ["3 different doctors (all said 'manage it')","CBT for 6 months","Anti-inflammatory diet (couldn't stick to it)","Meditation apps (couldn't focus)","Various supplements ($600+ spent)"],
+      fears: ["This is just my life now","I'll lose my job if I can't focus","I'll never feel like myself again","Spending money on something else that won't work"],
+      hopes: ["Wake up rested. Once.","Be present for the kids without faking it","Have energy to want things again"]
+    },
+    timeline: [
+      { date:'12 Mar 2026', title:'First DM', desc:'Replied to Reel: "I felt like you were talking to me"', type:'normal' },
+      { date:'26 Mar 2026', title:'Joined email list', desc:'Downloaded the nervous system regulation freebie', type:'normal' },
+      { date:'08 Apr 2026', title:'Booked Inner Voice Scan', desc:'Paid £47 within 4 minutes of seeing the offer post', type:'milestone' },
+      { date:'12 Apr 2026', title:'Voice sample submitted', desc:'Recorded same evening — ready for review', type:'milestone' },
+      { date:'15 Apr 2026', title:'Scan review scheduled', desc:'Original 1:1 call to walk through results', type:'normal' },
+      { date:'15 Apr 2026', title:'Scan review missed', desc:'Did not show up. No reply to follow-up message.', type:'urgent' }
+    ],
+    messages: [
+      { from:'lead', text:"Hi Leanne. I just watched your Reel about healing autoimmune disease and I cried. That's been my last 6 years.", date:'12 Mar', time:'10:42' },
+      { from:'leanne', text:"Sarah I'm so glad you reached out. That feeling of being unseen — I know it intimately. Would you tell me what a bad day looks like for you?", date:'12 Mar', time:'14:08' },
+      { from:'lead', text:"Yesterday I slept 11 hours and still couldn't get out of bed until 1pm. I cried in the shower. My husband doesn't understand anymore.", date:'12 Mar', time:'15:15' },
+      { from:'leanne', text:"That's not laziness. That's a body in survival. I want to show you what's actually happening — and what we can do about it. Would you be open to a scan? It's £47 and it shows what your body is actually holding.", date:'13 Mar', time:'09:20' },
+      { from:'lead', text:"Yes. I'll do it.", date:'08 Apr', time:'19:33' },
+      { from:'leanne', text:"Thank you for trusting me with this. I'll send the recording instructions over now. Take your time with the voice sample — early morning, before coffee, is ideal.", date:'08 Apr', time:'19:45' },
+      { from:'lead', text:"Submitted! Nervous to hear what it says.", date:'12 Apr', time:'21:08' },
+      { from:'leanne', text:"Got it Sarah. I'll have your full reading ready for our call on Friday. We're going to look at this together — no shock, no overwhelm. Just clarity.", date:'13 Apr', time:'08:14' },
+      { from:'leanne', text:"Hey Sarah — just checking in. We had a call yesterday and I missed you. No pressure at all. Whenever you're ready, I'm here.", date:'16 Apr', time:'11:02' },
+      { from:'leanne', text:"Sarah, no rush on a reply. I just wanted you to know I'm not going anywhere. Sending warmth.", date:'19 Apr', time:'08:30' }
+    ],
+    notes: [
+      { date:'12 Apr 2026', author:'Leanne', text:"Voice sample shows significant nervous system dysregulation — adrenal pattern is concerning but not unrecoverable. Sleep architecture is the priority.\n\nApproach: gentle. She's drowning. One step at a time. Do NOT lead with protocols on the call." },
+      { date:'16 Apr 2026', author:'Leanne', text:"She no-showed today. This is the textbook overwhelm response. She'll either re-engage in 48h or disappear. Plan: one warm message every 3 days for 2 weeks, then I let go." }
+    ],
+    needsReply: true, unread: 0
+  },
+
+  L02: { // Emma T. — Green Flag testimonial candidate
+    backstory: "Emma is 34, a project manager, and one of Leanne's earliest Academy members. Came in with hormonal cycle disruption, mood crashes, and exhaustion. She'd been told it was 'just perimenopause early.' After 4 months in the Academy and a follow-up scan, she's transformed.",
+    struggles: {
+      current: ["Maintaining the rhythm — life is busy","Cycle still slightly irregular","Some social fatigue at work events"],
+      hasTried: ["Hormonal contraception (made it worse)","Acupuncture (helped a bit)","Bioidentical hormones (cost prohibitive)"],
+      fears: ["Sliding back when life gets hard","Becoming complacent"],
+      hopes: ["Pregnancy in the next year","Stay this version of herself","Help other women find this"]
+    },
+    timeline: [
+      { date:'12 Nov 2025', title:'First contact', desc:'Friend (Becky M.) sent her a Leanne Reel', type:'normal' },
+      { date:'28 Nov 2025', title:'Booked first scan', desc:'£47 Inner Voice Scan', type:'milestone' },
+      { date:'05 Dec 2025', title:'Joined Academy', desc:'£11/month Glow Up Academy', type:'milestone' },
+      { date:'02 Mar 2026', title:'Re-scan', desc:'30% improvement across all markers', type:'milestone' },
+      { date:'18 Apr 2026', title:'Sent unsolicited testimonial', desc:'"This changed my life" — agreed to video clip', type:'milestone' }
+    ],
+    messages: [
+      { from:'lead', text:"Leanne. I just want you to know — I had my first proper period in 8 months. I cried with relief.", date:'14 Feb', time:'19:22' },
+      { from:'leanne', text:"Emma. I'm crying with you. This is what it looks like when the body remembers itself.", date:'14 Feb', time:'21:08' },
+      { from:'lead', text:"Just had my 4-month scan. The numbers blew my mind. Can I share my story somewhere? People need to know this is possible.", date:'18 Apr', time:'08:14' },
+      { from:'leanne', text:"Emma — yes. Would you be willing to do a 60-second video? Even your voice over a still image. Your story will reach women who need to hear it.", date:'18 Apr', time:'09:33' },
+      { from:'lead', text:"Send me the questions and I'll record this weekend. I owe this work that much.", date:'18 Apr', time:'10:20' }
+    ],
+    notes: [
+      { date:'02 Mar 2026', author:'Leanne', text:"Re-scan showed: hormonal balance up from 51 → 78. Energy up from 49 → 84. Sleep up from 58 → 82. This is a full transformation, not a tweak.\n\nShe's our strongest testimonial candidate. Treat her well." }
+    ],
+    needsReply: false, unread: 0
+  },
+
+  L03: { // Hannah B. — Pending Scan
+    backstory: "Hannah is 41, has 2 kids, runs a small business. She found Leanne through the email list 2 weeks ago. Booked a scan after the third email. Hasn't yet recorded her voice sample — common stall point.",
+    struggles: {
+      current: ["Heavy periods that knock her out for 2 days","Weight gain she can't shift","Mood swings affecting her marriage"],
+      hasTried: ["Mirena coil (removed after 6 months)","Personal training","Several elimination diets"],
+      fears: ["Doing it 'wrong' (perfectionist)","Hormones being the problem AND the answer"],
+      hopes: ["Predictable energy week to week","Not dreading her period"]
+    },
+    timeline: [
+      { date:'10 Apr 2026', title:'Joined email list', desc:'Via the "3 signs your hormones are talking" lead magnet', type:'normal' },
+      { date:'24 Apr 2026', title:'Paid for scan', desc:'£47 Inner Voice Scan booked', type:'milestone' },
+      { date:'28 Apr 2026', title:'Recording instructions sent', desc:'Awaiting voice sample', type:'normal' }
+    ],
+    messages: [
+      { from:'lead', text:"I bought the scan. Now I'm second-guessing whether I'll do the voice thing right.", date:'24 Apr', time:'21:14' },
+      { from:'leanne', text:"Hannah there is no 'right' way. The scan reads what's there — your nerves about doing it included. Try it tomorrow morning before coffee. 10 seconds. Anything you say.", date:'25 Apr', time:'07:10' },
+      { from:'lead', text:"Ok. Doing it tonight.", date:'25 Apr', time:'08:02' }
+    ],
+    notes: [{ date:'27 Apr 2026', author:'Leanne', text:"Sample not received. She's a perfectionist — likely overthinking. Send the 30-second video showing what it looks like in practice." }],
+    needsReply: false, unread: 0
+  },
+
+  L04: { // Maya R. — New
+    backstory: "Maya is 36, just DM'd after watching the autoimmune Reel. First contact yesterday. No history yet — purely warm enquiry.",
+    struggles: {
+      current: ["Chronic exhaustion for 18 months","Brain fog","Feels 'old' in her body","Doctors say bloods are 'fine'"],
+      hasTried: ["GP (twice)","Functional medicine consult (£300, no follow-through)","Yoga"],
+      fears: ["Spending more money for no answer","Being told it's anxiety again"],
+      hopes: ["Someone to take this seriously"]
+    },
+    timeline: [{ date:'29 Apr 2026', title:'First DM', desc:'After "I healed my autoimmune disease" Reel', type:'normal' }],
+    messages: [
+      { from:'lead', text:"Hi. I've been watching your content for a few weeks. I'm 36 and feel 80. I don't know if what you do can help but I'm desperate.", date:'29 Apr', time:'22:41' }
+    ],
+    notes: [{ date:'29 Apr 2026', author:'Leanne', text:"Fresh enquiry. Warm tone, real desperation. Reply with empathy first. No sales pitch in the first message." }],
+    needsReply: true, unread: 1
+  },
+
+  L05: { // Charlotte D. — Red Flag, Academy disengaged
+    backstory: "Charlotte joined the Academy 3 months ago after her trauma surfaced through a scan. She's 42, a single mother, and disclosed an abusive marriage that ended 18 months ago. She was engaged for the first 6 weeks. Then March came — anniversary month — and she went quiet.",
+    struggles: {
+      current: ["Hasn't logged into Academy in 3 weeks","Missed last 2 group calls","Dropped off the protocol","Likely emotional shutdown, not logistical"],
+      hasTried: ["Therapy (5 years on and off)","SSRIs","EMDR (helped most)","Yoga retreats"],
+      fears: ["Being seen as a quitter","That she's broken in a way that can't be fixed","Disappointing Leanne"],
+      hopes: ["Stop flinching when men come close","Sleep through the night","Trust her own judgment again"]
+    },
+    timeline: [
+      { date:'18 Jan 2026', title:'First scan', desc:'Heavy emotional resonance pattern — nervous system frozen', type:'milestone' },
+      { date:'02 Feb 2026', title:'Joined Academy', desc:'£11/month — strong start', type:'milestone' },
+      { date:'24 Feb 2026', title:'Group call attended', desc:'Spoke about her marriage publicly for first time', type:'milestone' },
+      { date:'10 Mar 2026', title:'Last login', desc:'Anniversary of leaving', type:'urgent' },
+      { date:'17 Mar 2026', title:'Missed first group call', desc:'No notice', type:'urgent' },
+      { date:'24 Mar 2026', title:'Missed second group call', desc:'No notice', type:'urgent' }
+    ],
+    messages: [
+      { from:'leanne', text:"Charlotte — just checking on you. Not about the Academy, not about anything you owe me. Just you. Are you ok?", date:'27 Mar', time:'11:08' },
+      { from:'leanne', text:"No reply needed. Just want you to know you're held in my mind.", date:'02 Apr', time:'09:14' },
+      { from:'leanne', text:"Thinking of you Charlotte. The community has missed you. So have I.", date:'14 Apr', time:'08:30' }
+    ],
+    notes: [
+      { date:'10 Mar 2026', author:'Leanne', text:"Anniversary date of her separation. She mentioned this to me 6 weeks ago. I should have flagged it then." },
+      { date:'27 Mar 2026', author:'Leanne', text:"Trauma-informed approach is the only one that fits here. Do not lead with 'where have you been'. Lead with 'are you ok'. She is allowed to disappear and return — the Academy is a safe place to do that." }
+    ],
+    needsReply: false, unread: 0
+  },
+
+  L06: { // Olivia P. — Conversion, just bought
+    backstory: "Olivia is 29, watched 4 weeks of YouTube Shorts before buying. Strong-intent buyer. Just paid for the scan 3 days ago. Pre-onboarding phase.",
+    struggles: {
+      current: ["Bloating after every meal","Skin breakouts she's never had before","Energy crashes at 3pm"],
+      hasTried: ["Elimination diet","Probiotics","Gut testing (£200, no insight)"],
+      fears: ["Adding another 'thing' that doesn't work"],
+      hopes: ["Eat without dread","Skin that doesn't hurt"]
+    },
+    timeline: [
+      { date:'02 Apr 2026', title:'First viewed YT Short', desc:'"What is an AO Scan in 60 seconds"', type:'normal' },
+      { date:'26 Apr 2026', title:'Booked scan', desc:'£47 Inner Voice Scan', type:'milestone' }
+    ],
+    messages: [
+      { from:'lead', text:"Just bought the scan. Watched probably every video you've made before clicking. Excited.", date:'26 Apr', time:'13:15' },
+      { from:'leanne', text:"Olivia! Welcome. The fact that you took your time means you'll get the most out of this. Onboarding pack coming today.", date:'26 Apr', time:'14:08' }
+    ],
+    notes: [{ date:'26 Apr 2026', author:'Leanne', text:"High-intent. Send onboarding within 24h. She'll be a strong member if we move her through scan → review → Academy quickly." }],
+    needsReply: false, unread: 0
+  },
+
+  L07: { // Jess W. — Deep Dive
+    backstory: "Jess is 39, mid-protocol. Sleep onset improved 40%. Engaged, asks specific questions. Currently working through the nervous system regulation phase.",
+    struggles: {
+      current: ["Anxiety still spikes on Sunday nights","Magnesium dosage uncertainty","Wants more granular tracking"],
+      hasTried: ["CBT","Acupuncture","Various supplements"],
+      fears: ["Plateau"],
+      hopes: ["A full anxiety-free week","Re-scan that shows the change"]
+    },
+    timeline: [
+      { date:'12 Feb 2026', title:'First scan', desc:'£47', type:'milestone' },
+      { date:'28 Mar 2026', title:'Started protocol', desc:'Nervous system regulation phase', type:'milestone' },
+      { date:'18 Apr 2026', title:'Mid-check-in', desc:'40% improvement in sleep onset', type:'milestone' }
+    ],
+    messages: [
+      { from:'lead', text:"Quick one — am I taking too much magnesium? I read different things online.", date:'25 Apr', time:'14:12' },
+      { from:'leanne', text:"Jess — let's not chase Google answers. The dose I gave you matches your scan. If you want to titrate, do it down 100mg for a week and see.", date:'25 Apr', time:'15:30' },
+      { from:'lead', text:"Right. Trusting the protocol. Sleep was better last week than it's been in years btw.", date:'25 Apr', time:'16:08' }
+    ],
+    notes: [{ date:'25 Apr 2026', author:'Leanne', text:"Engaged client, doing the work. Re-scan in 4 weeks. She's a strong candidate to upsell into 1:1 deep work." }],
+    needsReply: false, unread: 0
+  },
+
+  L08: { // Amy F. — Long-term Academy
+    backstory: "Amy is 45, 6-month Academy member, referred 2 friends already. Stable and thriving. Strong community presence.",
+    struggles: { current: ["Occasional dips around big work stress","Wants deeper community involvement"], hasTried:["Pretty much everything before finding Leanne"], fears:["Slipping back"], hopes:["Speaking to other women about this work"] },
+    timeline: [
+      { date:'15 Oct 2025', title:'Joined Academy', desc:'After her own scan in Sept', type:'milestone' },
+      { date:'15 Jan 2026', title:'3-month milestone scan', desc:'Stable, all systems improving', type:'milestone' },
+      { date:'12 Mar 2026', title:'Referred Becky M.', desc:'2nd referral this quarter', type:'milestone' }
+    ],
+    messages: [
+      { from:'leanne', text:"Amy — would you ever be open to being interviewed for Reveal2Heal? Your story is exactly the long-arc story I want to share.", date:'24 Apr', time:'10:08' },
+      { from:'lead', text:"Yes. Tell me when and what to prepare.", date:'24 Apr', time:'12:33' }
+    ],
+    notes: [{ date:'24 Apr 2026', author:'Leanne', text:"Schedule podcast recording for May. Long-form content gold." }],
+    needsReply: true, unread: 0
+  },
+
+  L09: { // Kate L. — Engaged, watching
+    backstory: "Kate has commented on 4 Reels in 3 weeks but hasn't taken action. Warm-watching the content.",
+    struggles: { current: ["Always overwhelmed","Can't stick to anything","Doesn't know where to start"], hasTried:["A bit of everything, nothing seriously"], fears:["Wasting money"], hopes:["A clear direction"] },
+    timeline: [{ date:'08 Apr 2026', title:'First Reel comment', desc:'On nervous system reel', type:'normal' }],
+    messages: [
+      { from:'lead', text:"This sounds amazing but I don't know where I'd even start.", date:'22 Apr', time:'18:08' }
+    ],
+    notes: [{ date:'22 Apr 2026', author:'Leanne', text:"Send the 'DM me SCAN' Reel. Soft invite. Don't push." }],
+    needsReply: true, unread: 1
+  },
+
+  L10: { // Sophie H. — Pending Scan, gone quiet
+    backstory: "Paid for the scan 8 days ago, hasn't recorded her voice. Has gone quiet. Common drop-off pattern.",
+    struggles: { current: ["Chronic inflammation","Joint pain"], hasTried:["NSAIDs","Anti-inflammatory diet"], fears:["This being one more thing"], hopes:["Pain-free movement"] },
+    timeline: [{ date:'21 Apr 2026', title:'Paid for scan', desc:'£47', type:'milestone' }],
+    messages: [
+      { from:'leanne', text:"Sophie — friendly reminder, the voice sample takes 10 seconds. Easier than you think. Here's the link: [recording instructions]", date:'25 Apr', time:'09:08' }
+    ],
+    notes: [{ date:'28 Apr 2026', author:'Leanne', text:"Second reminder due. Explain WHY the voice sample matters — not just instructions." }],
+    needsReply: false, unread: 0
+  },
+
+  L11: { // Lucy G. — Red Flag, missed sessions
+    backstory: "Lucy disclosed trauma history in her first session. Has missed 2 of the last 3 weekly check-ins. Trauma-informed handling is critical.",
+    struggles: {
+      current: ["Trauma history surfacing in scan","Sleep heavily disrupted","Started protocol then stopped","No explanation given"],
+      hasTried: ["Years of therapy","Multiple psychiatric meds","One trauma-focused yoga retreat"],
+      fears: ["Being abandoned again","Being told she's too much"],
+      hopes: ["A safe relationship with a practitioner who doesn't flinch"]
+    },
+    timeline: [
+      { date:'21 Mar 2026', title:'First scan', desc:'Heavy nervous system + trauma signature', type:'milestone' },
+      { date:'04 Apr 2026', title:'Started protocol', desc:'Slow, gentle, trauma-informed', type:'milestone' },
+      { date:'18 Apr 2026', title:'Missed weekly check-in', desc:'No notice', type:'urgent' },
+      { date:'25 Apr 2026', title:'Missed weekly check-in', desc:'No notice', type:'urgent' }
+    ],
+    messages: [
+      { from:'leanne', text:"Lucy — no agenda. Just wanted to say I'm here when you're ready. No questions, no expectations.", date:'19 Apr', time:'08:30' },
+      { from:'leanne', text:"Still here. Still holding space. Whenever, however.", date:'26 Apr', time:'09:14' }
+    ],
+    notes: [
+      { date:'04 Apr 2026', author:'Leanne', text:"Trauma surfaced with first protocol contact. This is the body remembering. She may disappear and return. That is normal. Hold the space." },
+      { date:'26 Apr 2026', author:'Leanne', text:"Two missed sessions. Pattern matches Charlotte D. Read carefully — do not crowd. One message per week, max." }
+    ],
+    needsReply: false, unread: 0
+  },
+
+  L12: { // Becky M. — New Academy member
+    backstory: "Becky just joined the Academy after her scan review. Month 1 of protocol. High intent.",
+    struggles: { current: ["Hormonal cycle disruption","Energy lulls","New to the work"], hasTried:["Conventional GP","Some supplements"], fears:["Doing it wrong"], hopes:["Feel like herself by autumn"] },
+    timeline: [
+      { date:'05 Apr 2026', title:'First scan', desc:'£47 — referred by Amy F.', type:'milestone' },
+      { date:'27 Apr 2026', title:'Joined Academy', desc:'Within 48h of scan review', type:'milestone' }
+    ],
+    messages: [
+      { from:'lead', text:"Just joined! Slightly intimidated, slightly excited.", date:'27 Apr', time:'19:33' },
+      { from:'leanne', text:"Becky welcome. Both feelings are right. Let's book your onboarding call this week.", date:'27 Apr', time:'20:14' }
+    ],
+    notes: [{ date:'27 Apr 2026', author:'Leanne', text:"High intent. Set up monthly check-ins for first 90 days. She's primed for transformation." }],
+    needsReply: true, unread: 0
+  }
+};
+
+// ---------- Tasks ----------
+let TASKS = [
+  { id:'T01', text:'Send welcome email to Maya R.',          priority:'high',    leadId:'L04', dueDays:0,  done:false },
+  { id:'T02', text:'Personal check-in DM to Sarah K.',       priority:'high',    leadId:'L01', dueDays:-2, done:false },
+  { id:'T03', text:'Schedule consult call with Hannah B.',   priority:'medium',  leadId:'L03', dueDays:1,  done:false },
+  { id:'T04', text:'Review Emma T.\'s 30-day check-in notes',priority:'low',     leadId:'L02', dueDays:3,  done:false },
+  { id:'T05', text:'Reach out to Charlotte D. — voice DM',   priority:'high',    leadId:'L05', dueDays:0,  done:false },
+  { id:'T06', text:'Send Olivia P. her scan onboarding pack',priority:'high',    leadId:'L06', dueDays:0,  done:false },
+  { id:'T07', text:'Reply to Jess W. about magnesium dosage',priority:'medium',  leadId:'L07', dueDays:0,  done:false },
+  { id:'T08', text:'Monthly newsletter to Academy members',  priority:'low',     leadId:null, dueDays:4,  done:false },
+  { id:'T09', text:'Personal check-in with Lucy G.',         priority:'high',    leadId:'L11', dueDays:0,  done:false },
+  { id:'T10', text:'Welcome Becky M. to Glow Up Academy',    priority:'medium',  leadId:'L12', dueDays:1,  done:false },
+  { id:'T11', text:'Second scan reminder — Sophie H.',       priority:'medium',  leadId:'L10', dueDays:-1, done:false },
+  { id:'T12', text:'Send Kate L. the "DM me SCAN" Reel',     priority:'medium',  leadId:'L09', dueDays:2,  done:false },
+  { id:'T13', text:'Invite Amy F. to Reveal2Heal podcast',   priority:'low',     leadId:'L08', dueDays:5,  done:false },
+  { id:'T14', text:'Block 2hrs Friday for batch filming',    priority:'medium',  leadId:null, dueDays:3,  done:true  }
+];
+
+// ---------- KPI definitions (computed below) ----------
+function computeKPIs(filteredLeads) {
+  const pipeline = filteredLeads.filter(l => l.status !== 'academy').length;
+  const pendingScans = filteredLeads.filter(l => l.status === 'scan' || l.funnelStage === 'data').length;
+  const consultsThisWeek = filteredLeads.filter(l => l.status === 'consult' && l.lastDays <= 7).length;
+  const academyCount = filteredLeads.filter(l => l.status === 'academy').length;
+  const scanLeads = filteredLeads.filter(l => l.status === 'scan' || l.funnelStage === 'data' || l.funnelStage === 'deepdive' || l.funnelStage === 'retention').length;
+  const consultLeads = filteredLeads.filter(l => l.funnelStage === 'deepdive' || l.funnelStage === 'retention' || l.status === 'consult').length;
+  const conversionRate = scanLeads > 0 ? Math.round((consultLeads / scanLeads) * 100) : 0;
+
+  // Trends (vs simulated previous week)
+  return [
+    { label:'Pipeline Leads', value:pipeline, trend:'+3', trendDir:'up',
+      sub:'New leads this week', icon:'👥', warn:false },
+    { label:'Pending Scans', value:pendingScans, trend:'+2', trendDir:'up',
+      sub:'Drop-off risk if > 5', icon:'⏳', warn: pendingScans > 5 },
+    { label:'Consults This Week', value:consultsThisWeek, trend:'+1', trendDir:'up',
+      sub:'Booked 1:1 calls', icon:'📅', warn:false },
+    { label:'Scan → Consult Rate', value:conversionRate + '%', trend:'-4%', trendDir:'down',
+      sub:'Conversion rate', icon:'📊', warn:false },
+    { label:'Academy Members', value:academyCount, trend:'+2', trendDir:'up',
+      sub:'Active in Glow Up', icon:'✨', warn:false }
+  ];
+}
+
+/* =====================================================================
+   GLOBAL FILTER STATE
+   PSEUDO-CODE: Any change to FILTERS triggers renderAll() which re-runs
+   every quadrant's render function with the filtered leads array.
+   ===================================================================== */
+const FILTERS = {
+  status: null,        // null = all, or one of LEAD_STATUSES.id
+  imbalance: null,     // null = all, or one of IMBALANCE_AREAS.id
+  dateRange: 7,        // 7, 14, 30, or 'all'
+  funnelStage: null,   // set when a funnel stage is clicked
+  search: '',
+  taskTab: 'open'
+};
+
+function getFilteredLeads() {
+  return LEADS.filter(l => {
+    if (FILTERS.status && l.status !== FILTERS.status) return false;
+    if (FILTERS.imbalance && !l.imbalance.includes(FILTERS.imbalance)) return false;
+    if (FILTERS.funnelStage && l.funnelStage !== FILTERS.funnelStage) return false;
+    if (FILTERS.dateRange !== 'all' && l.lastDays > FILTERS.dateRange) return false;
+    if (FILTERS.search && !l.name.toLowerCase().includes(FILTERS.search.toLowerCase())) return false;
+    return true;
+  });
+}
+
+/* =====================================================================
+   RENDER FUNCTIONS (one per quadrant + sidebar)
+   ===================================================================== */
+
+// ---------- SIDEBAR FILTERS ----------
+function renderSidebar() {
+  const statusWrap = document.getElementById('filter-status');
+  statusWrap.innerHTML = '';
+  LEAD_STATUSES.forEach(s => {
+    const count = LEADS.filter(l => l.status === s.id).length;
+    const btn = document.createElement('button');
+    btn.className = 'filter-item' + (FILTERS.status === s.id ? ' active' : '');
+    btn.innerHTML = `<span class="dot" style="background:${s.color}"></span>${s.label}<span class="count">${count}</span>`;
+    // PSEUDO-CODE: clicking a status filter sets FILTERS.status (toggling)
+    // and re-renders everything downstream.
+    btn.onclick = () => {
+      FILTERS.status = FILTERS.status === s.id ? null : s.id;
+      renderAll();
+    };
+    statusWrap.appendChild(btn);
+  });
+
+  const imbWrap = document.getElementById('filter-imbalance');
+  imbWrap.innerHTML = '';
+  IMBALANCE_AREAS.forEach(a => {
+    const count = LEADS.filter(l => l.imbalance.includes(a.id)).length;
+    if (count === 0) return;
+    const btn = document.createElement('button');
+    btn.className = 'filter-item' + (FILTERS.imbalance === a.id ? ' active' : '');
+    btn.innerHTML = `<span class="dot" style="background:${a.color}"></span>${a.label}<span class="count">${count}</span>`;
+    btn.onclick = () => {
+      FILTERS.imbalance = FILTERS.imbalance === a.id ? null : a.id;
+      renderAll();
+    };
+    imbWrap.appendChild(btn);
+  });
+
+  // Date range
+  document.querySelectorAll('#filter-date button').forEach(b => {
+    b.onclick = () => {
+      const r = b.dataset.range;
+      FILTERS.dateRange = r === 'all' ? 'all' : parseInt(r);
+      document.querySelectorAll('#filter-date button').forEach(x => x.classList.toggle('active', x === b));
+      renderAll();
+    };
+  });
+
+  // Clear buttons
+  document.querySelectorAll('.clear-btn').forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      FILTERS[b.dataset.clear] = null;
+      renderAll();
+    };
+  });
+}
+
+// ---------- KPI CARDS ----------
+function renderKPIs(leads) {
+  const wrap = document.getElementById('kpi-grid');
+  wrap.innerHTML = '';
+  const kpis = computeKPIs(leads);
+  kpis.forEach(k => {
+    const card = document.createElement('div');
+    card.className = 'kpi-card fade-in' + (k.warn ? ' warning' : '');
+    card.innerHTML = `
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-trend">
+        <span class="trend-pill trend-${k.trendDir}">
+          ${k.trendDir === 'up' ? '↑' : k.trendDir === 'down' ? '↓' : '→'} ${k.trend}
+        </span>
+        <span>${k.sub}</span>
+      </div>
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+// ---------- FUNNEL ----------
+function renderFunnel(leads) {
+  const wrap = document.getElementById('funnel-row');
+  wrap.innerHTML = '';
+  FUNNEL_STAGES.forEach(stage => {
+    // Count from ALL leads, not filtered (so funnel stays informative)
+    const count = LEADS.filter(l => l.funnelStage === stage.id).length;
+    const filteredCount = leads.filter(l => l.funnelStage === stage.id).length;
+    const stuckCount = LEADS.filter(l => l.funnelStage === stage.id && l.lastDays > 7).length;
+
+    const el = document.createElement('div');
+    el.className = 'funnel-stage' + (FILTERS.funnelStage === stage.id ? ' active' : '');
+    el.innerHTML = `
+      <div class="fs-name">${stage.label}</div>
+      <div class="fs-count">${count}</div>
+      <div class="fs-sub">${stuckCount > 0 ? stuckCount + ' stuck >7d' : 'flowing'}</div>
+    `;
+    // PSEUDO-CODE: On click, filter all cards to show only leads in this stage.
+    // Toggle off if clicking the same stage twice.
+    el.onclick = () => {
+      FILTERS.funnelStage = FILTERS.funnelStage === stage.id ? null : stage.id;
+      renderAll();
+      if (FILTERS.funnelStage) renderStageDetail(stage);
+      else document.getElementById('stage-detail').classList.remove('show');
+    };
+    wrap.appendChild(el);
+  });
+
+  // If a stage is already selected, show detail
+  if (FILTERS.funnelStage) {
+    const stage = FUNNEL_STAGES.find(s => s.id === FILTERS.funnelStage);
+    if (stage) renderStageDetail(stage);
+  }
+}
+
+function renderStageDetail(stage) {
+  const wrap = document.getElementById('stage-detail');
+  const stageLeads = LEADS.filter(l => l.funnelStage === stage.id);
+  const top3 = stageLeads.sort((a,b) => b.lastDays - a.lastDays).slice(0, 3);
+  wrap.classList.add('show');
+  wrap.innerHTML = `
+    <div class="sd-title">${stage.label} · ${stageLeads.length} lead${stageLeads.length !== 1 ? 's' : ''} ${stageLeads.length === 0 ? '' : '— top by dwell time'}</div>
+    <div class="sd-desc">${stage.desc}</div>
+    ${top3.length === 0 ? '<div style="font-size:12px;color:var(--text-muted);">No leads in this stage.</div>' :
+      `<div class="sd-leads">${top3.map(l => `
+        <div class="lead-pill" onclick="openLeadModal('${l.id}')">
+          <div class="avatar" style="width:22px;height:22px;font-size:10px;background:${avatarBg(l)}">${l.initials}</div>
+          ${l.name} · ${l.lastDays}d
+        </div>
+      `).join('')}</div>`
+    }
+  `;
+}
+
+// ---------- LEADS GRID ----------
+function renderLeads(leads) {
+  const wrap = document.getElementById('leads-grid');
+  document.getElementById('leads-count').textContent = '· ' + leads.length;
+
+  // Filter summary
+  const parts = [];
+  if (FILTERS.status) parts.push(LEAD_STATUSES.find(s => s.id === FILTERS.status)?.label);
+  if (FILTERS.imbalance) parts.push(IMBALANCE_AREAS.find(a => a.id === FILTERS.imbalance)?.label);
+  if (FILTERS.funnelStage) parts.push(FUNNEL_STAGES.find(s => s.id === FILTERS.funnelStage)?.label + ' stage');
+  if (FILTERS.dateRange !== 'all') parts.push('last ' + FILTERS.dateRange + 'd');
+  document.getElementById('leads-filter-summary').textContent = parts.length ? 'Showing: ' + parts.join(' · ') : 'All active leads · all timeframes';
+
+  if (leads.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">No leads match your filters. Clear a filter or expand the date range.</div>';
+    return;
+  }
+  wrap.innerHTML = '';
+  leads.forEach(l => {
+    const card = document.createElement('div');
+    card.className = 'lead-card fade-in flag-' + l.flag;
+    card.dataset.leadId = l.id;
+    const status = LEAD_STATUSES.find(s => s.id === l.status);
+    card.innerHTML = `
+      <div class="lead-head">
+        <div class="avatar" style="background:${avatarBg(l)}">${l.initials}</div>
+        <div class="lead-name-block">
+          <div class="lead-name">${l.name}</div>
+          <div class="lead-meta">${status.label} · last touch ${l.lastDays === 0 ? 'today' : l.lastDays + 'd ago'}</div>
+          <span class="flag-pill flag-${l.flag}-pill">${l.flag === 'red' ? '⚠ Red Flag' : l.flag === 'green' ? '✓ Green Flag' : '◐ Active'}</span>
+        </div>
+      </div>
+      <div class="action-plan">
+        <div class="ap-title">1-Page Action Plan</div>
+        <div class="ap-row"><strong>Root</strong><span>${l.actionPlan.root}</span></div>
+        <div class="ap-row"><strong>Imbalance</strong><span>${l.actionPlan.imbalance}</span></div>
+        <div class="ap-row"><strong>Action</strong><span>${l.actionPlan.action}</span></div>
+      </div>
+      <div class="lead-foot">
+        <button class="btn-ghost btn-sm" onclick="openLeadModal('${l.id}')">View Full Report</button>
+        <button class="btn btn-sm">Message</button>
+      </div>
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+// ---------- TASKS ----------
+function renderTasks(leads) {
+  const list = document.getElementById('task-list');
+  // Tab counts (always computed from full task list)
+  const open = TASKS.filter(t => !t.done);
+  const today = open.filter(t => t.dueDays === 0);
+  const overdue = open.filter(t => t.dueDays < 0);
+  const done = TASKS.filter(t => t.done);
+  document.getElementById('cnt-open').textContent = open.length;
+  document.getElementById('cnt-today').textContent = today.length;
+  document.getElementById('cnt-overdue').textContent = overdue.length;
+  document.getElementById('cnt-done').textContent = done.length;
+
+  // Filter by tab
+  let visible;
+  if (FILTERS.taskTab === 'open') visible = open;
+  else if (FILTERS.taskTab === 'today') visible = today;
+  else if (FILTERS.taskTab === 'overdue') visible = overdue;
+  else visible = done;
+
+  // Cross-filter — if a lead filter is active, only show tasks for those leads (or unassigned)
+  const leadIds = leads.map(l => l.id);
+  if (FILTERS.status || FILTERS.imbalance || FILTERS.funnelStage) {
+    visible = visible.filter(t => !t.leadId || leadIds.includes(t.leadId));
+  }
+
+  // Sort: priority desc (high>med>low), then due date asc
+  const pOrder = { high:0, medium:1, low:2 };
+  visible.sort((a,b) => pOrder[a.priority] - pOrder[b.priority] || a.dueDays - b.dueDays);
+
+  if (visible.length === 0) {
+    list.innerHTML = '<div class="empty-state">No tasks here. Take a breath.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  visible.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'task-row' + (t.done ? ' completed' : '');
+    const dueLabel = formatDue(t.dueDays);
+    const dueClass = t.dueDays < 0 ? 'overdue' : t.dueDays === 0 ? 'today' : '';
+    const lead = t.leadId ? LEADS.find(l => l.id === t.leadId) : null;
+    row.innerHTML = `
+      <div class="task-check" data-task="${t.id}">
+        <svg width="12" height="9" viewBox="0 0 12 9"><polyline points="1,4 4.5,7.5 11,1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="task-priority ${t.priority}" title="${t.priority} priority"></div>
+      <div class="task-text">${t.text}</div>
+      ${lead ? `<div class="task-lead" data-lead="${lead.id}">${lead.name}</div>` : ''}
+      <div class="task-due ${dueClass}">${dueLabel}</div>
+    `;
+    // PSEUDO-CODE: on check toggle, flip task.done, persist (here: in-memory),
+    // and re-run renderAll() so KPIs and tab counts update.
+    row.querySelector('.task-check').onclick = () => {
+      t.done = !t.done;
+      renderAll();
+    };
+    if (lead) {
+      row.querySelector('.task-lead').onclick = () => openLeadModal(lead.id);
+    }
+    list.appendChild(row);
+  });
+}
+
+// ---------- TASK TABS ----------
+function bindTaskTabs() {
+  document.querySelectorAll('.task-tab').forEach(b => {
+    b.onclick = () => {
+      FILTERS.taskTab = b.dataset.tasktab;
+      document.querySelectorAll('.task-tab').forEach(x => x.classList.toggle('active', x === b));
+      renderTasks(getFilteredLeads());
+    };
+  });
+}
+
+/* =====================================================================
+   MODAL: FULL REPORT
+   ===================================================================== */
+/* =====================================================================
+   PROFILE MODAL — Tabbed deep dive into a single lead
+   Tabs: Overview · Story & Struggles · Scan Report · Messages · Notes
+   ===================================================================== */
+let CURRENT_LEAD_ID = null;
+let CURRENT_PROFILE_TAB = 'overview';
+
+function openLeadModal(leadId) {
+  const lead = LEADS.find(l => l.id === leadId);
+  if (!lead) return;
+  CURRENT_LEAD_ID = leadId;
+  CURRENT_PROFILE_TAB = 'overview';
+  renderProfileModal();
+  document.getElementById('modal').classList.add('show');
+}
+
+function renderProfileModal() {
+  const lead = LEADS.find(l => l.id === CURRENT_LEAD_ID);
+  const detail = LEAD_DETAILS[CURRENT_LEAD_ID] || {};
+  const status = LEAD_STATUSES.find(s => s.id === lead.status);
+  const imbalanceTags = lead.imbalance.map(i => {
+    const a = IMBALANCE_AREAS.find(x => x.id === i);
+    return `<span style="display:inline-block;padding:3px 10px;background:${a.color}22;color:${a.color};border-radius:999px;font-size:11px;font-weight:500;margin-right:4px;">${a.label}</span>`;
+  }).join('');
+
+  const messageCount = (detail.messages || []).length;
+  const noteCount = (detail.notes || []).length;
+
+  // Build tab contents
+  const overviewHTML = renderOverviewPane(lead, detail);
+  const storyHTML = renderStoryPane(lead, detail);
+  const scanHTML = renderScanPane(lead);
+  const messagesHTML = renderMessagesPane(lead, detail);
+  const notesHTML = renderNotesPane(lead, detail);
+
+  document.getElementById('modal-body').className = 'modal profile-modal';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="modal-header">
+      <div style="display:flex;gap:14px;align-items:center;flex:1;min-width:0;">
+        <div class="avatar" style="width:60px;height:60px;font-size:20px;background:${avatarBg(lead)};flex-shrink:0;">${lead.initials}</div>
+        <div style="min-width:0;flex:1;">
+          <h2>${lead.name}</h2>
+          <p>${status.label} · ${lead.source} · last touch ${lead.lastDays === 0 ? 'today' : lead.lastDays + 'd ago'}</p>
+          <div style="margin-top:8px;">${imbalanceTags}</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+
+    <div class="profile-tabs">
+      <button class="profile-tab ${CURRENT_PROFILE_TAB==='overview'?'active':''}" onclick="switchProfileTab('overview')">Overview</button>
+      <button class="profile-tab ${CURRENT_PROFILE_TAB==='story'?'active':''}" onclick="switchProfileTab('story')">Story &amp; Struggles</button>
+      <button class="profile-tab ${CURRENT_PROFILE_TAB==='scan'?'active':''}" onclick="switchProfileTab('scan')">Scan Report</button>
+      <button class="profile-tab ${CURRENT_PROFILE_TAB==='messages'?'active':''}" onclick="switchProfileTab('messages')">Messages<span class="tab-count">${messageCount}</span></button>
+      <button class="profile-tab ${CURRENT_PROFILE_TAB==='notes'?'active':''}" onclick="switchProfileTab('notes')">Notes<span class="tab-count">${noteCount}</span></button>
+    </div>
+
+    <div class="profile-pane ${CURRENT_PROFILE_TAB==='overview'?'active':''}" id="pane-overview">${overviewHTML}</div>
+    <div class="profile-pane ${CURRENT_PROFILE_TAB==='story'?'active':''}" id="pane-story">${storyHTML}</div>
+    <div class="profile-pane ${CURRENT_PROFILE_TAB==='scan'?'active':''}" id="pane-scan">${scanHTML}</div>
+    <div class="profile-pane ${CURRENT_PROFILE_TAB==='messages'?'active':''}" id="pane-messages">${messagesHTML}</div>
+    <div class="profile-pane ${CURRENT_PROFILE_TAB==='notes'?'active':''}" id="pane-notes">${notesHTML}</div>
+  `;
+}
+
+function switchProfileTab(tab) {
+  CURRENT_PROFILE_TAB = tab;
+  document.querySelectorAll('.profile-tab').forEach((b, i) => {
+    const tabs = ['overview','story','scan','messages','notes'];
+    b.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.profile-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('pane-' + tab).classList.add('active');
+}
+
+function renderOverviewPane(lead, detail) {
+  const recentMsgs = (detail.messages || []).slice(-2);
+  const nextTask = TASKS.find(t => t.leadId === lead.id && !t.done);
+  return `
+    <div class="modal-section">
+      <h3>1-Page Action Plan</h3>
+      <div class="action-plan" style="background:var(--surface2);">
+        <div class="ap-row"><strong>Root</strong><span>${lead.actionPlan.root}</span></div>
+        <div class="ap-row"><strong>Imbalance</strong><span>${lead.actionPlan.imbalance}</span></div>
+        <div class="ap-row"><strong>Action</strong><span>${lead.actionPlan.action}</span></div>
+      </div>
+    </div>
+
+    ${nextTask ? `
+      <div class="modal-section">
+        <h3>Next Task</h3>
+        <div class="task-row" style="margin:0;">
+          <div class="task-priority ${nextTask.priority}"></div>
+          <div class="task-text">${nextTask.text}</div>
+          <div class="task-due ${nextTask.dueDays < 0 ? 'overdue' : nextTask.dueDays === 0 ? 'today' : ''}">${formatDue(nextTask.dueDays)}</div>
+        </div>
+      </div>
+    ` : ''}
+
+    ${recentMsgs.length ? `
+      <div class="modal-section">
+        <h3>Recent Messages</h3>
+        ${recentMsgs.map(m => `
+          <div class="profile-msg-mini">
+            <div class="pmm-from ${m.from === 'lead' ? 'lead' : ''}">${m.from === 'lead' ? lead.name : 'Leanne'}</div>
+            <div class="pmm-text">${m.text}</div>
+            <div class="pmm-time">${m.date} · ${m.time}</div>
+          </div>
+        `).join('')}
+        <button class="btn-ghost btn-sm" onclick="switchProfileTab('messages')" style="margin-top:6px;">View full thread →</button>
+      </div>
+    ` : ''}
+
+    <div class="modal-section">
+      <h3>Quick Actions</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="openMessagesFromProfile('${lead.id}')">💬 Send Message</button>
+        <button class="btn-ghost btn-sm">📅 Schedule Call</button>
+        <button class="btn-ghost btn-sm">+ Add Task</button>
+        <button class="btn-ghost btn-sm" style="margin-left:auto;color:var(--text-muted);">↓ Download PDF</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderStoryPane(lead, detail) {
+  if (!detail.struggles && !detail.backstory) {
+    return '<div class="empty-state">No story details captured yet for this lead.</div>';
+  }
+  const s = detail.struggles || {};
+  const tl = detail.timeline || [];
+  return `
+    ${detail.backstory ? `
+      <div class="modal-section">
+        <h3>Background</h3>
+        <div class="struggle-block"><p>${detail.backstory}</p></div>
+      </div>
+    ` : ''}
+
+    ${s.current && s.current.length ? `
+      <div class="modal-section">
+        <h3>What She's Struggling With Right Now</h3>
+        <div class="struggle-block urgent">
+          <ul>${s.current.map(x => `<li>${x}</li>`).join('')}</ul>
+        </div>
+      </div>
+    ` : ''}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      ${s.hasTried && s.hasTried.length ? `
+        <div class="modal-section" style="margin:0;">
+          <h3>Already Tried</h3>
+          <div class="struggle-block">
+            <ul>${s.hasTried.map(x => `<li>${x}</li>`).join('')}</ul>
+          </div>
+        </div>
+      ` : ''}
+      ${s.fears && s.fears.length ? `
+        <div class="modal-section" style="margin:0;">
+          <h3>Fears &amp; Blockers</h3>
+          <div class="struggle-block warm">
+            <ul>${s.fears.map(x => `<li>${x}</li>`).join('')}</ul>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+
+    ${s.hopes && s.hopes.length ? `
+      <div class="modal-section">
+        <h3>What She's Hoping For</h3>
+        <div class="struggle-block positive">
+          <ul>${s.hopes.map(x => `<li>${x}</li>`).join('')}</ul>
+        </div>
+      </div>
+    ` : ''}
+
+    ${tl.length ? `
+      <div class="modal-section">
+        <h3>Journey Timeline</h3>
+        <div class="timeline">
+          ${tl.map(t => `
+            <div class="timeline-item ${t.type === 'milestone' ? 'milestone' : ''}" ${t.type === 'urgent' ? 'style="--ti-accent:var(--red);"' : ''}>
+              <div class="ti-date">${t.date}</div>
+              <div class="ti-title" ${t.type === 'urgent' ? 'style="color:var(--red);"' : ''}>${t.title}</div>
+              <div class="ti-desc">${t.desc}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderScanPane(lead) {
+  const r = lead.fullReport;
+  if (!r.scanDate || r.scanDate === 'Pending') {
+    return `
+      <div class="modal-section">
+        <h3>Scan Status</h3>
+        <p style="background:var(--amber-faint);border-left:3px solid var(--amber);padding:12px 14px;border-radius:0 8px 8px 0;color:var(--text);font-size:13px;">⏳ ${r.scanDate === 'Pending' ? 'Scan paid but voice sample not yet recorded.' : 'No scan booked yet.'}</p>
+        <p style="margin-top:14px;font-size:13px;color:var(--text-muted);">${r.notes}</p>
+      </div>
+    `;
+  }
+  return `
+    <div class="modal-section">
+      <h3>Inner Voice 2.0 Aura — Full Scan Report</h3>
+      <p style="color:var(--text-muted);font-size:12px;">Scan date: ${r.scanDate}</p>
+      <div class="metric-grid">
+        <div class="metric-cell"><div class="mc-num">${r.overall}</div><div class="mc-lbl">Overall Resonance</div></div>
+        <div class="metric-cell"><div class="mc-num" style="color:${r.overall >= 75 ? 'var(--green)' : r.overall >= 60 ? 'var(--gold)' : 'var(--red)'}">${r.overall >= 75 ? 'Stable' : r.overall >= 60 ? 'Watch' : 'Action'}</div><div class="mc-lbl">Trajectory</div></div>
+        <div class="metric-cell"><div class="mc-num">${r.sections.length}</div><div class="mc-lbl">Systems Scanned</div></div>
+      </div>
+      <div style="margin-top:14px;">
+        ${r.sections.map(s => `
+          <div class="bar-row">
+            <div class="br-top"><span class="br-name">${s.name}</span><span class="br-val">${s.value}%</span></div>
+            <div class="br-track"><div class="br-fill" style="width:${s.value}%;background:${s.value >= 75 ? 'var(--green)' : s.value >= 60 ? 'var(--gold)' : 'var(--red)'};"></div></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="modal-section">
+      <h3>Practitioner Reading</h3>
+      <p>${r.notes}</p>
+    </div>
+  `;
+}
+
+function renderMessagesPane(lead, detail) {
+  const msgs = detail.messages || [];
+  if (!msgs.length) {
+    return `
+      <div class="empty-state" style="margin-bottom:14px;">No messages yet with ${lead.name}.</div>
+      <button class="btn btn-sm" onclick="openMessagesFromProfile('${lead.id}')">Open in Messages tab →</button>
+    `;
+  }
+  // Group by date
+  let html = '';
+  let lastDate = null;
+  msgs.forEach(m => {
+    if (m.date !== lastDate) {
+      html += `<div class="msg-day-divider">${m.date}</div>`;
+      lastDate = m.date;
+    }
+    html += `
+      <div class="msg-bubble from-${m.from === 'lead' ? 'lead' : 'leanne'}">
+        ${m.text}
+        <div class="msg-time">${m.time}</div>
+      </div>
+    `;
+  });
+  return `
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;padding:8px 4px 14px;">${html}</div>
+    <button class="btn btn-sm" onclick="openMessagesFromProfile('${lead.id}')" style="margin-top:8px;">Open full conversation →</button>
+  `;
+}
+
+function renderNotesPane(lead, detail) {
+  const notes = detail.notes || [];
+  if (!notes.length) return '<div class="empty-state">No practitioner notes yet.</div>';
+  return notes.map(n => `
+    <div class="note-card">
+      <div class="nc-meta"><span>${n.author}</span><span>${n.date}</span></div>
+      <div class="nc-text">${n.text}</div>
+    </div>
+  `).join('') + `
+    <textarea placeholder="Add a new note..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;color:var(--text);min-height:80px;margin-top:14px;"></textarea>
+    <button class="btn btn-sm" style="margin-top:8px;">Save note</button>
+  `;
+}
+
+function openMessagesFromProfile(leadId) {
+  closeModal();
+  switchView('messages');
+  setTimeout(() => openConversation(leadId), 60);
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+  CURRENT_LEAD_ID = null;
+}
+document.getElementById('modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
+
+/* =====================================================================
+   VIEW SWITCHING (Dashboard ↔ Messages)
+   ===================================================================== */
+let CURRENT_VIEW = 'dashboard';
+let CURRENT_CONVERSATION = null;
+let MSG_FILTER = 'all';
+
+function switchView(view) {
+  CURRENT_VIEW = view;
+  document.querySelectorAll('.view-switcher button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('dashboard-view').style.display = view === 'dashboard' ? 'grid' : 'none';
+  document.getElementById('messages-view').classList.toggle('active', view === 'messages');
+  if (view === 'messages') renderConversationList();
+}
+document.querySelectorAll('.view-switcher button').forEach(b => {
+  b.onclick = () => switchView(b.dataset.view);
+});
+
+/* =====================================================================
+   MESSAGES VIEW
+   ===================================================================== */
+function getConversationList() {
+  // Build list from all leads with messages, sorted by recency
+  const list = LEADS.map(l => {
+    const d = LEAD_DETAILS[l.id] || {};
+    const msgs = d.messages || [];
+    const last = msgs[msgs.length - 1];
+    return {
+      lead: l,
+      detail: d,
+      lastMsg: last,
+      lastDate: last ? last.date + ' ' + last.time : null,
+      unread: d.unread || 0,
+      needsReply: d.needsReply || false
+    };
+  }).filter(c => c.lastMsg);
+
+  // Sort: needs reply first, then unread, then recency (using lastDays as proxy)
+  list.sort((a, b) => {
+    if (a.needsReply !== b.needsReply) return a.needsReply ? -1 : 1;
+    if (a.unread !== b.unread) return b.unread - a.unread;
+    return a.lead.lastDays - b.lead.lastDays;
+  });
+
+  // Apply filter
+  if (MSG_FILTER === 'unread') return list.filter(c => c.unread > 0);
+  if (MSG_FILTER === 'reply') return list.filter(c => c.needsReply);
+  return list;
+}
+
+function renderConversationList() {
+  const wrap = document.getElementById('msg-conv-list');
+  const list = getConversationList();
+
+  if (!list.length) {
+    wrap.innerHTML = '<div class="empty-state" style="margin:20px;">No conversations match this filter.</div>';
+    return;
+  }
+
+  wrap.innerHTML = list.map(c => {
+    const lead = c.lead;
+    const status = LEAD_STATUSES.find(s => s.id === lead.status);
+    const isActive = CURRENT_CONVERSATION === lead.id;
+    return `
+      <div class="msg-conv-item ${isActive ? 'active' : ''}" onclick="openConversation('${lead.id}')">
+        <div class="avatar" style="background:${avatarBg(lead)}">${lead.initials}</div>
+        <div class="msg-conv-info">
+          <div class="msg-conv-top">
+            <div class="msg-conv-name">${lead.name}</div>
+            <div class="msg-conv-time">${c.lastMsg.date}</div>
+          </div>
+          <div class="msg-conv-preview">${c.lastMsg.from === 'leanne' ? 'You: ' : ''}${c.lastMsg.text}</div>
+          <div class="msg-conv-meta">
+            <span class="msg-status-tag" style="background:${status.color}22;color:${status.color};">${status.label}</span>
+            <span style="display:flex;align-items:center;gap:6px;">
+              ${c.needsReply ? '<span style="font-size:10px;color:var(--gold);font-weight:600;">↩ reply</span>' : ''}
+              ${c.unread > 0 ? '<span class="msg-unread-dot"></span>' : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Update topbar unread badge
+  const totalUnread = LEADS.reduce((sum, l) => sum + ((LEAD_DETAILS[l.id] || {}).unread || 0), 0);
+  const badge = document.getElementById('msg-unread-count');
+  if (totalUnread > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = totalUnread;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function openConversation(leadId) {
+  CURRENT_CONVERSATION = leadId;
+  // Mark as read
+  if (LEAD_DETAILS[leadId]) LEAD_DETAILS[leadId].unread = 0;
+  renderConversationList();
+  renderConversationThread();
+  document.getElementById('messages-view').classList.add('thread-active');
+}
+
+function renderConversationThread() {
+  if (!CURRENT_CONVERSATION) return;
+  const lead = LEADS.find(l => l.id === CURRENT_CONVERSATION);
+  const detail = LEAD_DETAILS[CURRENT_CONVERSATION] || {};
+  const msgs = detail.messages || [];
+  const status = LEAD_STATUSES.find(s => s.id === lead.status);
+  const pane = document.getElementById('msg-thread-pane');
+
+  // Group by date
+  let bodyHTML = '';
+  let lastDate = null;
+
+  // Context banner — quick reminder of what they're struggling with
+  const struggles = (detail.struggles && detail.struggles.current) || [];
+  if (struggles.length) {
+    bodyHTML += `
+      <div class="msg-context-banner">
+        <strong>Quick context</strong>
+        ${lead.actionPlan.root} · ${struggles.slice(0,2).join(' · ')}
+      </div>
+    `;
+  }
+
+  msgs.forEach(m => {
+    if (m.date !== lastDate) {
+      bodyHTML += `<div class="msg-day-divider">${m.date}</div>`;
+      lastDate = m.date;
+    }
+    bodyHTML += `
+      <div class="msg-bubble from-${m.from === 'lead' ? 'lead' : 'leanne'}">
+        ${m.text}
+        <div class="msg-time">${m.time}</div>
+      </div>
+    `;
+  });
+
+  if (!msgs.length) {
+    bodyHTML = '<div class="msg-empty">No messages yet. Start the conversation below.</div>';
+  }
+
+  pane.innerHTML = `
+    <div class="msg-thread-header">
+      <button class="btn-ghost btn-sm" onclick="closeConversation()" style="display:none;padding:6px 10px;" id="msg-back-btn">←</button>
+      <div class="avatar" style="background:${avatarBg(lead)}">${lead.initials}</div>
+      <div class="msg-thread-info">
+        <div class="mt-name">${lead.name}</div>
+        <div class="mt-sub"><span class="msg-status-tag" style="background:${status.color}22;color:${status.color};">${status.label}</span> · ${lead.actionPlan.imbalance}</div>
+      </div>
+      <div class="msg-thread-actions">
+        <button class="btn-ghost btn-sm" onclick="openLeadModal('${lead.id}')">View profile</button>
+      </div>
+    </div>
+    <div class="msg-thread-body" id="msg-thread-body">${bodyHTML}</div>
+    <div class="msg-quick-replies">
+      <button class="msg-quick-reply" onclick="insertQuickReply(this)">Thanks for sharing this with me.</button>
+      <button class="msg-quick-reply" onclick="insertQuickReply(this)">No pressure at all — when you're ready.</button>
+      <button class="msg-quick-reply" onclick="insertQuickReply(this)">Let's book a call this week.</button>
+      <button class="msg-quick-reply" onclick="insertQuickReply(this)">I hear you. That's a lot.</button>
+    </div>
+    <div class="msg-compose">
+      <textarea id="msg-compose-input" placeholder="Type a message to ${lead.name.split(' ')[0]}..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+      <button class="msg-compose-send" onclick="sendMessage()" title="Send (Enter)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  `;
+  if (window.innerWidth < 1100) document.getElementById('msg-back-btn').style.display = 'flex';
+
+  // Scroll to bottom
+  setTimeout(() => {
+    const body = document.getElementById('msg-thread-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  }, 30);
+}
+
+function closeConversation() {
+  CURRENT_CONVERSATION = null;
+  document.getElementById('messages-view').classList.remove('thread-active');
+  document.getElementById('msg-thread-pane').innerHTML = `
+    <div class="msg-empty">
+      <div style="font-size:42px;margin-bottom:12px;">💬</div>
+      <div>Select a conversation to begin</div>
+    </div>
+  `;
+}
+
+function insertQuickReply(btn) {
+  const input = document.getElementById('msg-compose-input');
+  input.value = btn.textContent;
+  input.focus();
+}
+
+function sendMessage() {
+  const input = document.getElementById('msg-compose-input');
+  const text = input.value.trim();
+  if (!text || !CURRENT_CONVERSATION) return;
+
+  const detail = LEAD_DETAILS[CURRENT_CONVERSATION];
+  if (!detail.messages) detail.messages = [];
+
+  // Today's date in same format as existing messages
+  const now = new Date();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dateStr = now.getDate() + ' ' + months[now.getMonth()];
+  const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+  detail.messages.push({ from:'leanne', text, date: dateStr, time: timeStr });
+  detail.needsReply = false;
+
+  input.value = '';
+  renderConversationThread();
+  renderConversationList();
+}
+
+// Filter tabs in messages view
+document.querySelectorAll('#msg-filter-tabs button').forEach(b => {
+  b.onclick = () => {
+    MSG_FILTER = b.dataset.msgfilter;
+    document.querySelectorAll('#msg-filter-tabs button').forEach(x => x.classList.toggle('active', x === b));
+    renderConversationList();
+  };
+});
+
+/* =====================================================================
+   UTILITIES
+   ===================================================================== */
+function avatarBg(l) {
+  // Deterministic gradient per lead, themed to brand
+  const palette = [
+    'linear-gradient(135deg,#7B5CA8,#4A2D6B)',
+    'linear-gradient(135deg,#C9A24A,#7B5CA8)',
+    'linear-gradient(135deg,#5C7FB8,#4A2D6B)',
+    'linear-gradient(135deg,#6FA88A,#4A2D6B)',
+    'linear-gradient(135deg,#A04C7A,#4A2D6B)',
+    'linear-gradient(135deg,#D89B4A,#7B5CA8)'
+  ];
+  const seed = l.id.charCodeAt(1) + l.id.charCodeAt(2);
+  return palette[seed % palette.length];
+}
+
+function formatDue(days) {
+  if (days < 0) return Math.abs(days) + 'd overdue';
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return 'in ' + days + 'd';
+}
+
+/* =====================================================================
+   SEARCH
+   ===================================================================== */
+document.getElementById('search').oninput = (e) => {
+  FILTERS.search = e.target.value;
+  renderAll();
+};
+
+/* =====================================================================
+   MOBILE SIDEBAR
+   ===================================================================== */
+const sbToggle = document.getElementById('sb-toggle');
+const sidebar = document.getElementById('sidebar');
+function checkMobile() {
+  if (window.innerWidth < 1100) sbToggle.style.display = 'flex';
+  else { sbToggle.style.display = 'none'; sidebar.classList.remove('open'); }
+}
+sbToggle.onclick = () => sidebar.classList.toggle('open');
+window.addEventListener('resize', checkMobile);
+checkMobile();
+
+/* =====================================================================
+   ADD NEW LEAD
+   ===================================================================== */
+let NEW_LEAD_IMBALANCES = [];
+
+function openAddLeadModal() {
+  NEW_LEAD_IMBALANCES = [];
+  const statusOptions = LEAD_STATUSES.map(s =>
+    `<option value="${s.id}">${s.label}</option>`).join('');
+  const funnelOptions = FUNNEL_STAGES.map(f =>
+    `<option value="${f.id}">${f.label}</option>`).join('');
+  const imbalanceChips = IMBALANCE_AREAS.map(a =>
+    `<span class="form-chip" data-id="${a.id}" onclick="toggleNewLeadImbalance(this,'${a.id}')">${a.label}</span>`
+  ).join('');
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="modal-header">
+      <div>
+        <h2>Add New Lead</h2>
+        <p>Create a new client or lead in the pipeline</p>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid-2">
+        <div class="form-row">
+          <label>Full Name *</label>
+          <input id="nl-name" class="form-input" type="text" placeholder="e.g. Sarah Mitchell" />
+        </div>
+        <div class="form-row">
+          <label>Source / Where they found Leanne</label>
+          <input id="nl-source" class="form-input" type="text" placeholder="e.g. Instagram Reel, Referral" />
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="form-row">
+          <label>Status</label>
+          <select id="nl-status" class="form-select">${statusOptions}</select>
+        </div>
+        <div class="form-row">
+          <label>Funnel Stage</label>
+          <select id="nl-funnel" class="form-select">${funnelOptions}</select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Imbalance Areas (select all that apply)</label>
+        <div class="form-chips">${imbalanceChips}</div>
+      </div>
+      <div class="form-row">
+        <label>Initial Notes</label>
+        <textarea id="nl-notes" class="form-textarea" placeholder="What did they share? What do they need? Why did they reach out?"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Immediate Next Action</label>
+        <input id="nl-action" class="form-input" type="text" placeholder="e.g. Send welcome email + book discovery call" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-ghost btn-sm" onclick="closeModal()" style="border:1px solid var(--border);">Cancel</button>
+        <button class="btn btn-sm" onclick="saveNewLead()">Save Lead →</button>
+      </div>
+    </div>`;
+
+  document.getElementById('modal').classList.add('show');
+}
+
+function toggleNewLeadImbalance(el, id) {
+  if (NEW_LEAD_IMBALANCES.includes(id)) {
+    NEW_LEAD_IMBALANCES = NEW_LEAD_IMBALANCES.filter(x => x !== id);
+    el.classList.remove('selected');
+  } else {
+    NEW_LEAD_IMBALANCES.push(id);
+    el.classList.add('selected');
+  }
+}
+
+function saveNewLead() {
+  const name = document.getElementById('nl-name').value.trim();
+  if (!name) {
+    document.getElementById('nl-name').style.borderColor = 'var(--red)';
+    document.getElementById('nl-name').focus();
+    return;
+  }
+  const source  = document.getElementById('nl-source').value.trim() || 'Direct';
+  const status  = document.getElementById('nl-status').value;
+  const funnel  = document.getElementById('nl-funnel').value;
+  const notes   = document.getElementById('nl-notes').value.trim();
+  const action  = document.getElementById('nl-action').value.trim();
+
+  // Generate initials from name
+  const parts    = name.split(' ').filter(Boolean);
+  const initials = parts.length >= 2
+    ? parts[0][0].toUpperCase() + parts[parts.length - 1][0].toUpperCase()
+    : parts[0].slice(0, 2).toUpperCase();
+
+  // Generate a unique ID
+  const newId = 'L' + String(LEADS.length + 1).padStart(2, '0');
+
+  const newLead = {
+    id: newId,
+    name,
+    initials,
+    status,
+    funnelStage: funnel,
+    imbalance: [...NEW_LEAD_IMBALANCES],
+    flag: 'neutral',
+    lastDays: 0,
+    source,
+    actionPlan: {
+      root: 'New lead — root cause TBD',
+      imbalance: NEW_LEAD_IMBALANCES.length
+        ? NEW_LEAD_IMBALANCES.map(i => IMBALANCE_AREAS.find(a => a.id === i)?.label).join(', ')
+        : 'Not yet assessed',
+      action: action || 'Follow up and gather more information'
+    },
+    fullReport: {
+      scanDate: null,
+      overall: null,
+      sections: [],
+      notes: notes || 'No initial notes added.'
+    }
+  };
+
+  LEADS.push(newLead);
+
+  // Create a minimal LEAD_DETAILS entry so profile modal can open
+  LEAD_DETAILS[newId] = {
+    backstory: notes || 'No background added yet.',
+    struggles: { current: [], hasTried: [], fears: [], hopes: [] },
+    timeline: [
+      { date: new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }),
+        title: 'Lead Created', desc: 'Added manually to pipeline', type: 'milestone' }
+    ],
+    messages: [],
+    notes: '',
+    unread: 0,
+    needsReply: false
+  };
+
+  closeModal();
+  renderAll();
+
+  // Flash the new card briefly to confirm it was added
+  setTimeout(() => {
+    const card = document.querySelector(`[data-lead-id="${newId}"]`);
+    if (card) {
+      card.style.outline = '2px solid var(--primary-light)';
+      card.style.transition = 'outline 0.3s';
+      setTimeout(() => { card.style.outline = ''; }, 2000);
+    }
+  }, 100);
+}
+
+/* =====================================================================
+   MASTER RENDER LOOP
+   PSEUDO-CODE: Single render entry-point. Every interaction calls this.
+   Each quadrant is independent but all read from the same FILTERS state.
+   ===================================================================== */
+function renderAll() {
+  const filtered = getFilteredLeads();
+  renderSidebar();
+  renderKPIs(filtered);
+  renderFunnel(filtered);
+  renderLeads(filtered);
+  renderTasks(filtered);
+}
+
+bindTaskTabs();
+
+// If Supabase key is set, use auth flow — otherwise run directly (dev/demo mode)
+if (SUPABASE_KEY === 'PASTE_YOUR_PUBLISHABLE_KEY_HERE') {
+  // Demo mode — no key yet, show app directly with dummy data
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'block';
+  renderAll();
+  renderConversationList();
+} else {
+  // Production mode — require login
+  initAuth();
+}
+</script>
+
+</div><!-- end #app-shell -->
+</body>
+</html>
