@@ -1189,6 +1189,25 @@ button { font-family: inherit; cursor: pointer; }
   </div>
 </div>
 
+<!-- ====================== CLIENT PORTAL ====================== -->
+<div id="client-portal" style="display:none;min-height:100vh;background:var(--bg);flex-direction:column;align-items:center;">
+
+  <!-- Client top bar -->
+  <div style="width:100%;background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:36px;height:36px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;">G</div>
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--primary-deep);">Glow Up Academy</div>
+        <div style="font-size:11px;color:var(--text-muted);">Your Healing Portal</div>
+      </div>
+    </div>
+    <button onclick="signOut()" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 14px;font-size:12px;color:var(--text-muted);cursor:pointer;">Sign out</button>
+  </div>
+
+  <!-- Client content -->
+  <div id="client-portal-body" style="width:100%;max-width:680px;padding:32px 20px;"></div>
+</div>
+
 <!-- ====================== APP SHELL (shown after login) ====================== -->
 <div id="app-shell" style="display:none;">
 
@@ -1456,12 +1475,24 @@ function showLogin() {
 
 async function showApp() {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-shell').style.display = 'block';
-  const badge = document.getElementById('user-badge');
-  if (badge && CURRENT_USER) badge.textContent = CURRENT_USER.email;
-  await loadFromDB();
-  renderAll();
-  renderConversationList();
+
+  // Check role from Supabase profiles table
+  const { data: profile } = await db.from('profiles').select('role, email').eq('id', CURRENT_USER.id).single();
+  const role = profile?.role || 'client';
+
+  if (role === 'admin') {
+    document.getElementById('app-shell').style.display = 'block';
+    document.getElementById('client-portal').style.display = 'none';
+    const badge = document.getElementById('user-badge');
+    if (badge && CURRENT_USER) badge.textContent = CURRENT_USER.email;
+    await loadFromDB();
+    renderAll();
+    renderConversationList();
+  } else {
+    document.getElementById('app-shell').style.display = 'none';
+    document.getElementById('client-portal').style.display = 'flex';
+    renderClientPortal(profile);
+  }
 }
 
 /* =====================================================================
@@ -3026,6 +3057,93 @@ function saveNewLead() {
       setTimeout(() => { card.style.outline = ''; }, 2000);
     }
   }, 100);
+}
+
+/* =====================================================================
+   CLIENT PORTAL
+   Shown to non-admin users after login. Clean personal wellness view.
+   ===================================================================== */
+async function renderClientPortal(profile) {
+  const body = document.getElementById('client-portal-body');
+  const email = CURRENT_USER?.email || '';
+  const firstName = email.split('@')[0].split('.')[0];
+  const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+
+  // Fetch their lead record if it exists (matched by email)
+  const { data: leadRow } = await db.from('leads').select('*').eq('email', email).single();
+
+  // Fetch their messages
+  let messages = [];
+  if (leadRow) {
+    const { data: msgs } = await db.from('messages').select('*').eq('lead_id', leadRow.id).order('created_at', { ascending: true });
+    messages = msgs || [];
+  }
+
+  const statusLabels = { new:'New Enquiry', engaged:'Engaged', scan:'Pending Scan', consult:'Consult Booked', academy:'In Academy', redflag:'Active' };
+  const statusColor = { new:'var(--blue)', engaged:'var(--primary-light)', scan:'var(--amber)', consult:'var(--gold)', academy:'var(--green)', redflag:'var(--primary)' };
+  const status = leadRow?.status || 'new';
+
+  body.innerHTML = `
+    <!-- Welcome -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="width:64px;height:64px;background:var(--primary-faint);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--primary);margin:0 auto 16px;">${displayName[0]}</div>
+      <h2 style="font-size:30px;color:var(--primary-deep);margin-bottom:6px;">Welcome back, ${displayName} ✨</h2>
+      <p style="color:var(--text-muted);font-size:14px;">Your healing journey with Leanne Littlewood</p>
+    </div>
+
+    ${leadRow ? `
+    <!-- Status card -->
+    <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-sm);">
+      <div style="width:10px;height:10px;border-radius:50%;background:${statusColor[status]};flex-shrink:0;"></div>
+      <div>
+        <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:2px;">Your Status</div>
+        <div style="font-weight:600;color:var(--primary-deep);font-size:15px;">${statusLabels[status] || status}</div>
+      </div>
+      ${leadRow.funnel_stage === 'retention' ? `<div style="margin-left:auto;background:var(--green-faint);color:var(--green);border-radius:99px;padding:4px 12px;font-size:12px;font-weight:600;">Active Member 🌿</div>` : ''}
+    </div>
+
+    <!-- Next step -->
+    ${leadRow.action_next ? `
+    <div style="background:var(--primary-faint);border-radius:var(--radius);border:1px solid var(--primary-light);padding:20px 24px;margin-bottom:20px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--primary-light);margin-bottom:6px;font-weight:700;">Your Next Step</div>
+      <p style="color:var(--primary-deep);font-size:14px;line-height:1.6;">${leadRow.action_next}</p>
+    </div>` : ''}
+
+    <!-- Scan results -->
+    ${leadRow.scan_overall ? `
+    <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:20px 24px;margin-bottom:20px;box-shadow:var(--shadow-sm);">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--gold);margin-bottom:12px;font-weight:700;">Inner Voice Scan Results</div>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:48px;font-weight:700;color:var(--primary-deep);">${leadRow.scan_overall}</div>
+        <div style="font-size:13px;color:var(--text-muted);">Overall wellness score<br><span style="color:var(--green);font-weight:600;">Scan date: ${leadRow.scan_date || 'Recent'}</span></div>
+      </div>
+    </div>` : ''}
+    ` : `
+    <!-- No lead record yet -->
+    <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:32px 24px;margin-bottom:20px;text-align:center;box-shadow:var(--shadow-sm);">
+      <div style="font-size:32px;margin-bottom:12px;">🌿</div>
+      <h3 style="font-size:20px;color:var(--primary-deep);margin-bottom:8px;">Your journey is just beginning</h3>
+      <p style="color:var(--text-muted);font-size:13.5px;line-height:1.6;">Leanne will set up your profile shortly. You'll be able to see your scan results, progress, and messages here.</p>
+    </div>
+    `}
+
+    <!-- Messages -->
+    <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:20px 24px;box-shadow:var(--shadow-sm);">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--gold);margin-bottom:16px;font-weight:700;">Messages with Leanne</div>
+      ${messages.length === 0 ? `
+        <p style="color:var(--text-muted);font-size:13.5px;text-align:center;padding:20px 0;">No messages yet — Leanne will reach out soon 💜</p>
+      ` : messages.map(m => `
+        <div style="display:flex;flex-direction:column;align-items:${m.from_type === 'leanne' ? 'flex-start' : 'flex-end'};margin-bottom:12px;">
+          <div style="max-width:80%;background:${m.from_type === 'leanne' ? 'var(--primary-faint)' : 'var(--primary)'};color:${m.from_type === 'leanne' ? 'var(--primary-deep)' : '#fff'};border-radius:${m.from_type === 'leanne' ? '4px 14px 14px 14px' : '14px 4px 14px 14px'};padding:10px 14px;font-size:13.5px;line-height:1.55;">
+            ${m.text}
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px;">${m.from_type === 'leanne' ? 'Leanne · ' : ''}${m.date_label || ''} ${m.time_label || ''}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <p style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:24px;">Glow Up Academy · Powered by love and science 💜</p>
+  `;
 }
 
 /* =====================================================================
