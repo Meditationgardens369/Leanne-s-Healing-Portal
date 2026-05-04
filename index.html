@@ -1454,13 +1454,154 @@ function showLogin() {
   document.getElementById('app-shell').style.display = 'none';
 }
 
-function showApp() {
+async function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
   const badge = document.getElementById('user-badge');
   if (badge && CURRENT_USER) badge.textContent = CURRENT_USER.email;
+  await loadFromDB();
   renderAll();
   renderConversationList();
+}
+
+/* =====================================================================
+   DATABASE LOAD & SAVE FUNCTIONS
+   These replace the hardcoded dummy arrays with real Supabase data.
+   ===================================================================== */
+async function loadFromDB() {
+  try {
+    // Load leads
+    const { data: leadsData, error: leadsError } = await db.from('leads').select('*').order('created_at', { ascending: false });
+    if (!leadsError && leadsData && leadsData.length > 0) {
+      LEADS = leadsData.map(row => ({
+        id: row.id,
+        name: row.name,
+        initials: row.initials || getInitials(row.name),
+        status: row.status || 'new',
+        funnelStage: row.funnel_stage || 'awareness',
+        imbalance: row.imbalance || [],
+        flag: row.flag || 'neutral',
+        lastDays: row.last_days || 0,
+        source: row.source || 'Direct',
+        actionPlan: {
+          root: row.action_root || 'To be assessed',
+          imbalance: row.action_imbalance || 'Not yet assessed',
+          action: row.action_next || 'Follow up'
+        },
+        fullReport: {
+          scanDate: row.scan_date || null,
+          overall: row.scan_overall || null,
+          sections: [],
+          notes: row.notes || ''
+        }
+      }));
+
+      // Build LEAD_DETAILS entries for DB leads
+      leadsData.forEach(row => {
+        if (!LEAD_DETAILS[row.id]) {
+          LEAD_DETAILS[row.id] = {
+            backstory: row.backstory || '',
+            struggles: { current: [], hasTried: [], fears: [], hopes: [] },
+            timeline: [{ date: new Date(row.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }), title: 'Lead Added', desc: row.source || 'Added to pipeline', type: 'milestone' }],
+            messages: [],
+            notes: row.notes || '',
+            unread: 0,
+            needsReply: false
+          };
+        }
+      });
+    }
+
+    // Load tasks
+    const { data: tasksData, error: tasksError } = await db.from('tasks').select('*').order('created_at', { ascending: true });
+    if (!tasksError && tasksData && tasksData.length > 0) {
+      TASKS = tasksData.map(row => ({
+        id: row.id,
+        text: row.text,
+        priority: row.priority || 'medium',
+        leadId: row.lead_id || null,
+        dueDays: row.due_days || 0,
+        done: row.done || false
+      }));
+    }
+
+    // Load messages
+    const { data: msgsData, error: msgsError } = await db.from('messages').select('*').order('created_at', { ascending: true });
+    if (!msgsError && msgsData) {
+      msgsData.forEach(msg => {
+        if (LEAD_DETAILS[msg.lead_id]) {
+          LEAD_DETAILS[msg.lead_id].messages.push({
+            from: msg.from_type,
+            text: msg.text,
+            date: msg.date_label || '',
+            time: msg.time_label || ''
+          });
+        }
+      });
+    }
+  } catch(e) {
+    console.warn('DB load failed, using existing data:', e.message);
+  }
+}
+
+function getInitials(name) {
+  const parts = (name || '').split(' ').filter(Boolean);
+  if (parts.length >= 2) return parts[0][0].toUpperCase() + parts[parts.length-1][0].toUpperCase();
+  return (parts[0] || 'XX').slice(0,2).toUpperCase();
+}
+
+async function saveLeadToDB(lead) {
+  try {
+    const { error } = await db.from('leads').upsert({
+      id: lead.id,
+      name: lead.name,
+      initials: lead.initials,
+      status: lead.status,
+      funnel_stage: lead.funnelStage,
+      imbalance: lead.imbalance,
+      flag: lead.flag,
+      last_days: lead.lastDays,
+      source: lead.source,
+      action_root: lead.actionPlan?.root,
+      action_imbalance: lead.actionPlan?.imbalance,
+      action_next: lead.actionPlan?.action,
+      notes: lead.fullReport?.notes || ''
+    });
+    if (error) console.warn('Save lead error:', error.message);
+  } catch(e) {
+    console.warn('Save lead failed:', e.message);
+  }
+}
+
+async function saveTaskToDB(task) {
+  try {
+    const { error } = await db.from('tasks').upsert({
+      id: task.id,
+      text: task.text,
+      priority: task.priority,
+      lead_id: task.leadId,
+      due_days: task.dueDays,
+      done: task.done
+    });
+    if (error) console.warn('Save task error:', error.message);
+  } catch(e) {
+    console.warn('Save task failed:', e.message);
+  }
+}
+
+async function saveMessageToDB(leadId, msg) {
+  try {
+    const { error } = await db.from('messages').insert({
+      lead_id: leadId,
+      from_type: msg.from,
+      text: msg.text,
+      date_label: msg.date,
+      time_label: msg.time
+    });
+    if (error) console.warn('Save message error:', error.message);
+  } catch(e) {
+    console.warn('Save message failed:', e.message);
+  }
 }
 
 /* =====================================================================
@@ -1500,8 +1641,8 @@ const FUNNEL_STAGES = [
   { id: 'retention',   label: 'Retention',    desc: 'Active in Glow Up Academy or ongoing care. Long-term relationship. Content here serves community, not acquisition.' }
 ];
 
-// ---------- Leads (simulated client roster) ----------
-const LEADS = [
+// ---------- Leads — loaded from Supabase ----------
+let LEADS = [
   { id:'L01', name:'Sarah K.',     initials:'SK', status:'redflag',   funnelStage:'data',       imbalance:['sleep','anxiety'],   flag:'red',   lastDays:9,  source:'Instagram Reel',
     actionPlan:{ root:'Sleep deprivation + chronic stress', imbalance:'Persistent anxiety, low cortisol pattern', action:'Schedule 10-min daily breathwork; reschedule scan review (overdue)' },
     fullReport:{ scanDate:'12 Apr 2026', overall:62, sections:[
@@ -1593,9 +1734,8 @@ const LEADS = [
       notes:'High intent, joined Academy within 48h of scan review. Set up monthly check-ins for her first 90 days.' } }
 ];
 
-// ---------- Extended client profiles (rich data) ----------
-// Keyed by lead.id — kept separate to keep LEADS array readable.
-const LEAD_DETAILS = {
+// ---------- Extended client profiles — loaded from Supabase ----------
+let LEAD_DETAILS = {
   L01: { // Sarah K. — Red Flag, stuck in Data Capture
     backstory: "Sarah found Leanne through a Reel about healing autoimmune disease naturally. She's 38, a teacher, and has been managing what doctors loosely call 'chronic fatigue with fibromyalgia features' for 6 years. She was sleeping 10 hours and waking exhausted. She paid for the scan three weeks ago after watching every Reel Leanne had posted that month.",
     struggles: {
@@ -2667,8 +2807,12 @@ function sendMessage() {
   const dateStr = now.getDate() + ' ' + months[now.getMonth()];
   const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
 
-  detail.messages.push({ from:'leanne', text, date: dateStr, time: timeStr });
+  const msg = { from:'leanne', text, date: dateStr, time: timeStr };
+  detail.messages.push(msg);
   detail.needsReply = false;
+
+  // Save message to Supabase
+  saveMessageToDB(CURRENT_CONVERSATION, msg);
 
   input.value = '';
   renderConversationThread();
@@ -2866,6 +3010,9 @@ function saveNewLead() {
     unread: 0,
     needsReply: false
   };
+
+  // Save to Supabase database
+  saveLeadToDB(newLead);
 
   closeModal();
   renderAll();
