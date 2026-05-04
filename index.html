@@ -1472,7 +1472,7 @@ async function loadFromDB() {
   try {
     // Load leads
     const { data: leadsData, error: leadsError } = await db.from('leads').select('*').order('created_at', { ascending: false });
-    if (!leadsError && leadsData && leadsData.length > 0) {
+    if (!leadsError && leadsData !== null) {
       LEADS = leadsData.map(row => ({
         id: row.id,
         name: row.name,
@@ -1514,7 +1514,7 @@ async function loadFromDB() {
 
     // Load tasks
     const { data: tasksData, error: tasksError } = await db.from('tasks').select('*').order('created_at', { ascending: true });
-    if (!tasksError && tasksData && tasksData.length > 0) {
+    if (!tasksError && tasksData !== null) {
       TASKS = tasksData.map(row => ({
         id: row.id,
         text: row.text,
